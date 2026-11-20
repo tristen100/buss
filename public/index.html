@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="et" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>buss · kiireim tee Tallinnas</title>
+<link rel="canonical" href="https://buss.veebi.dev/">
+<meta name="theme-color" content="#0B1016">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="buss">
+<meta property="og:title" content="buss · kiireim tee Tallinnas">
+<meta property="og:description" content="Kiireim tee Tallinnas live-aegadega: buss, tramm, troll, kõnd ja vajadusel jooks.">
+<meta property="og:image" content="https://buss.veebi.dev/icons/og.png">
+<meta property="og:url" content="https://buss.veebi.dev/">
+<meta name="description" content="Kiireim tee Tallinnas live-aegadega: buss, tramm, troll, kõnd ja vajadusel jooks.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230B1016'/%3E%3Cpath d='M9 22c0-7 14-5 14-12' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-dasharray='0 4.2'/%3E%3Ccircle cx='9' cy='22' r='3' fill='%23fff'/%3E%3Ccircle cx='23' cy='10' r='3' fill='%23FF2D87'/%3E%3C/svg%3E">
+<script>
+  (function(){var R=document.documentElement,d=matchMedia('(prefers-color-scheme: dark)').matches,p='',g=null;
+   try{p=localStorage.getItem('buss-theme')||'';g=localStorage.getItem('buss-glass')}catch(e){}
+   R.dataset.theme=(p==='light'||p==='dark')?p:(d?'dark':'light');
+   if(g==='0'||(g===null&&matchMedia('(prefers-reduced-transparency: reduce)').matches))R.classList.add('noglass');})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link rel="stylesheet" href="app.css?v=7dfd1d2e">
+</head>
+<body data-view="home">
+<div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
+<div class="maploading" id="maploading">Laadin kaarti</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="lensdefs"></defs></svg>
+
+<!-- top -->
+<header class="top">
+  <button class="searchpill glass" id="openSearch" aria-label="Otsi sihtkohta">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M9 22c0-7 14-5 14-12" fill="none" stroke="var(--on-ink)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0 4.2"/><circle cx="9" cy="22" r="3" fill="var(--on-ink)"/><circle cx="23" cy="10" r="3" fill="#FF2D87"/></svg></span>
+    <span class="ph">Kuhu?</span>
+    <span class="ic" data-i="search"></span>
+  </button>
+  <div class="fromto glass">
+    <button class="iconbtn" id="ftBack" aria-label="Tagasi" data-i="back"></button>
+    <div class="ft-lines">
+      <div><span class="dotme"></span><span class="k" id="ftFrom">Sinu asukoht</span></div>
+      <div><span class="dotto"></span><b id="ftTo"></b></div>
+    </div>
+    <button class="iconbtn" id="ftSwap" aria-label="Vaheta suunad" data-i="swap"></button>
+  </div>
+  <button class="setbtn glass" id="openSet" aria-label="Seaded" aria-expanded="false" data-i="gear"></button>
+</header>
+
+<div class="fabs">
+  <button class="fab glass locate" id="locate" aria-label="Minu asukoht" data-i="locate"></button>
+  <button class="fab glass donate" id="donate" aria-label="Toeta arendust" aria-expanded="false"><span data-i="heart"></span><span class="lbl">Toeta</span></button>
+</div>
+<div class="zoom glass">
+  <button id="zin" aria-label="Suurenda" data-i="plus"></button>
+  <button id="zout" aria-label="Vähenda" data-i="minus"></button>
+</div>
+
+<div class="dpop glass solidish" id="dpop" role="dialog" aria-label="Toeta arendust">
+  <button class="x" id="dclose" aria-label="Sulge" data-i="close"></button>
+  <div class="hi" data-i="heart"></div>
+  <h3>Toeta arendust</h3>
+  <p>buss.veebi.dev on tasuta ja ilma reklaamideta. Kui see aitas sul bussile jõuda, saad arendust toetada.</p>
+  <button class="btn pri" id="dgo"><span data-i="heart"></span>Toeta</button>
+  <span class="cap">Makseviis lisandub peagi</span>
+</div>
+
+<!-- sheet / panel -->
+<section class="sheet glass solidish" id="sheet" aria-live="polite">
+  <div class="grab" id="grab" role="button" tabindex="0" aria-label="Lohista paneeli"></div>
+  <div class="sbody" id="sbody">
+
+    <div class="view" data-v="home">
+      <div class="chips favchips" id="favChips" aria-label="Lemmikud"></div>
+      <div class="row">
+        <div class="sp"><h2 class="h1">Lähedal</h2><div class="sub" id="nearSub">Laadin peatusi…</div></div>
+        <span class="livechip"><span data-i="live"></span>Live <span id="liveClock"></span></span>
+      </div>
+      <div class="near" id="near"></div>
+      <div id="recentSect" hidden><div class="sect">Viimati</div>
+      <div class="chips" id="recentChips"></div></div>
+      <div class="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · sõiduandmed transport.tallinn.ee · aadressid Maa-amet, Photon</div>
+    </div>
+
+    <div class="view" data-v="search">
+      <div class="shead">
+        <button class="iconbtn" id="sBack" aria-label="Tagasi" data-i="back"></button>
+        <span class="h1" style="font-size:18px">Kuhu lähed?</span>
+      </div>
+      <div class="sfields">
+        <label class="sf"><span class="k">Kust</span><span class="dotme"></span><input id="fromIn" value="Sinu asukoht" aria-label="Kust" readonly></label>
+        <label class="sf"><span class="k">Kuhu</span><span class="dotto"></span><input id="q" placeholder="Aadress või koht" autocomplete="off" aria-label="Kuhu"><button class="clr" id="qclr" aria-label="Tühjenda" data-i="close"></button></label>
+      </div>
+      <div class="when" id="sWhen"></div>
+      <div class="plist" id="plist"></div>
+      <div id="snote"></div>
+    </div>
+
+    <div class="view" data-v="settings">
+      <div class="shead">
+        <button class="iconbtn" id="setBack" aria-label="Tagasi" data-i="back"></button>
+        <h2 class="h1" style="font-size:20px">Seaded</h2>
+      </div>
+
+      <section class="sg" aria-labelledby="sgFav">
+        <h3 id="sgFav">Lemmikud</h3>
+        <div class="well">
+          <div class="favs" id="favList"></div>
+          <button class="addrow" id="favAdd" aria-expanded="false"><span class="ico add" data-i="plus"></span>Lisa lemmik</button>
+          <div class="favadd" id="favAddBox" hidden>
+            <label class="sf"><span class="dotto"></span><input id="favQ" placeholder="Otsi kohta või aadressi" autocomplete="off" aria-label="Otsi kohta"></label>
+            <div class="plist" id="favRes"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sg" aria-labelledby="sgPace">
+        <h3 id="sgPace">Kiirused</h3>
+        <p class="sgd">Kõnd loeb igal teel. „Jõua kiiremini“ sörgib, kui aega on, ja jookseb, kui buss on kohe minemas.</p>
+        <div class="well">
+          <div class="srow pace" data-k="walk">
+            <span class="ico" data-i="walk"></span>
+            <div class="pt"><b>Kõndimine</b><small class="mpk"></small></div>
+            <div class="step"><button data-d="-1" aria-label="Kõnni aeglasemalt" data-i="minus"></button><output aria-live="polite"></output><button data-d="1" aria-label="Kõnni kiiremini" data-i="plus"></button></div>
+          </div>
+          <div class="srow pace" data-k="jog">
+            <span class="ico jog" data-i="jog"></span>
+            <div class="pt"><b>Sörkimine</b><small class="mpk"></small></div>
+            <div class="step"><button data-d="-1" aria-label="Sörgi aeglasemalt" data-i="minus"></button><output aria-live="polite"></output><button data-d="1" aria-label="Sörgi kiiremini" data-i="plus"></button></div>
+          </div>
+          <div class="srow pace" data-k="run">
+            <span class="ico run" data-i="run"></span>
+            <div class="pt"><b>Jooksmine</b><small class="mpk"></small></div>
+            <div class="step"><button data-d="-1" aria-label="Jookse aeglasemalt" data-i="minus"></button><output aria-live="polite"></output><button data-d="1" aria-label="Jookse kiiremini" data-i="plus"></button></div>
+          </div>
+          <div class="srow pace" data-k="max">
+            <span class="ico lim" data-i="flag"></span>
+            <div class="pt"><b>Jooksu piir</b><small>kokku ühel teel</small></div>
+            <div class="step"><button data-d="-1" aria-label="Vähem jooksu" data-i="minus"></button><output aria-live="polite"></output><button data-d="1" aria-label="Rohkem jooksu" data-i="plus"></button></div>
+          </div>
+          <div class="pcmp" aria-label="Näide: 640 m">
+            <div class="pcap">640 m, näiteks Estonia peatusse</div>
+            <div class="pb walk"><span>Kõnd</span><i></i><b></b></div>
+            <div class="pb jog"><span>Sörk</span><i></i><b></b></div>
+            <div class="pb run"><span>Jooks</span><i></i><b></b></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sg" aria-labelledby="sgLook">
+        <h3 id="sgLook">Välimus</h3>
+        <div class="well">
+          <div class="srow col">
+            <div class="pt"><b>Teema</b></div>
+            <div class="seg" role="radiogroup" aria-label="Teema">
+              <span class="cell"></span>
+              <button role="radio" data-t="light"><span data-i="sun"></span>Hele</button>
+              <button role="radio" data-t="dark"><span data-i="moon"></span>Tume</button>
+              <button role="radio" data-t="auto"><span data-i="auto"></span>Automaatne</button>
+            </div>
+            <div class="segcap" id="segcap"></div>
+          </div>
+          <div class="srow">
+            <div class="pt"><b>Vedel klaas</b><small>Paneelid murravad kaarti nagu paks klaas. Väljas on pinnad ühtlased ja vanem telefon töötab sujuvamalt.</small></div>
+            <button class="tog" role="switch" aria-checked="true" id="glassTog" aria-label="Vedel klaas"><span class="kn"></span></button>
+          </div>
+        </div>
+      </section>
+      <section class="sg" aria-labelledby="sgApp">
+        <h3 id="sgApp">Rakendus</h3>
+        <div class="well">
+          <button class="srow arow" id="appSug"><span class="ico" data-i="chat"></span><span class="pt"><b>Soovita funktsiooni</b><small>Mis teeks rakenduse sulle paremaks?</small></span><span class="cv" data-i="chev"></span></button>
+          <button class="srow arow" id="appInst"><span class="ico" data-i="install"></span><span class="pt"><b>Lisa avaekraanile</b><small>Avaneb nagu äpp, ühe puudutusega</small></span><span class="cv" data-i="chev"></span></button>
+          <button class="srow arow" id="appTut"><span class="ico" data-i="info"></span><span class="pt"><b>Näita juhendit uuesti</b><small>Lühike ringkäik</small></span><span class="cv" data-i="chev"></span></button>
+          <a class="srow arow" href="https://github.com/tristen100/buss" target="_blank" rel="noopener"><span class="ico" data-i="github"></span><span class="pt"><b>Lähtekood GitHubis</b><small>Avatud lähtekood, MIT litsents</small></span><span class="cv" data-i="ext"></span></a>
+        </div>
+      </section>
+      <p class="setfoot">buss.veebi.dev on tasuta ja ilma reklaamideta. Lemmikud ja seaded jäävad sinu seadmesse. Kasutajate loendamiseks saadan juhusliku seadme tunnuse, mitte asukohta. Andmed: transport.tallinn.ee. Aadressid: Maa-amet, Photon. Kaart © OpenStreetMap, OpenFreeMap. Tegi <a href="https://veebi.dev" target="_blank" rel="noopener">VeebiDev</a>.</p>
+    </div>
+
+    <div class="view" data-v="results">
+      <div class="rhead">
+        <div class="t"><h2 class="h1" id="resTitle">4 teed</h2><div class="sub" id="resSub">Kiireim kohal 17:04</div></div>
+        <button class="runbtn" role="switch" aria-checked="false" data-run><span data-i="run"></span><span>Jõua kiiremini</span><span class="sw"><span class="kn"></span></span></button>
+      </div>
+      <div id="resBody"></div>
+    </div>
+
+    <div class="view" data-v="route">
+      <div class="dhead">
+        <button class="back" id="rBack"><span data-i="back"></span>Teed</button>
+        <span class="sp"></span>
+        <button class="runbtn" role="switch" aria-checked="false" data-run><span data-i="run"></span><span>Jõua kiiremini</span><span class="sw"><span class="kn"></span></span></button>
+      </div>
+      <div id="routeBody"></div>
+    </div>
+
+  </div>
+</section>
+<div class="scrim" id="scrim"></div>
+<div class="savesheet glass solidish" id="save" role="dialog" aria-modal="true" aria-labelledby="saveT">
+  <button class="x" id="saveX" aria-label="Sulge" data-i="close"></button>
+  <h3 id="saveT">Salvesta lemmikuks</h3>
+  <div class="splace"><span class="pi" id="saveIc"></span><div><b id="saveP"></b><small id="saveA"></small></div></div>
+  <label class="fl"><span>Nimi</span><input id="saveName" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="nt Kool, Trenn, Ema juures"></label>
+  <div class="fl"><span>Ikoon</span><div class="icg" id="saveIcons" role="radiogroup" aria-label="Ikoon"></div><p class="guess" id="guess" aria-live="polite"></p></div>
+  <div class="fa"><button class="del" id="saveDel"><span data-i="trash"></span>Eemalda</button><span></span><button class="btn pri sm" id="saveOk">Salvesta</button></div>
+</div>
+<div class="toast glass solidish" id="toast"></div>
+<div class="snack glass solidish" id="snack" role="status"><span></span><button>Võta tagasi</button></div>
+<div class="savesheet dlg glass solidish" id="sug" role="dialog" aria-modal="true" aria-labelledby="sugT">
+  <button class="x" id="sugX" aria-label="Sulge" data-i="close"></button>
+  <h3 id="sugT">Soovita funktsiooni</h3>
+  <label class="fl"><span>Mida soovid?</span><textarea id="sugText" maxlength="1500" rows="5" placeholder="Näiteks: näita ka rongiaegu"></textarea></label>
+  <label class="fl"><span>Kontakt, kui tahad vastust</span><input id="sugContact" maxlength="120" autocomplete="email" placeholder="e-post, pole kohustuslik"></label>
+  <p class="dcap">Soovitus jõuab otse arendajani. Kaasa läheb ainult see tekst ja juhuslik seadme tunnus.</p>
+  <div class="fa"><span></span><span></span><button class="btn pri sm" id="sugOk">Saada</button></div>
+</div>
+<div class="savesheet dlg glass solidish" id="inst" role="dialog" aria-modal="true" aria-labelledby="instT">
+  <button class="x" id="instX" aria-label="Sulge" data-i="close"></button>
+  <div class="instic"><img src="/icons/icon-192.png" alt="" width="56" height="56"></div>
+  <h3 id="instT">Lisa avaekraanile</h3>
+  <p id="instP" class="dtxt"></p>
+  <ol class="isteps" id="instSteps"></ol>
+  <div class="fa"><button class="del" id="instNo">Hiljem</button><span></span><button class="btn pri sm" id="instOk">Selge</button></div>
+</div>
+<div class="tut" id="tut" aria-live="polite">
+  <div class="tring" id="tutRing"></div>
+  <div class="tbox glass solidish" id="tutBox" role="dialog" aria-labelledby="tutT">
+    <div class="tic" id="tutIc" hidden></div>
+    <h3 id="tutT"></h3>
+    <p id="tutP"></p>
+    <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
+  </div>
+</div>
+<script type="module" src="app.js?v=66d7336d"></script>
+</body>
+</html>
