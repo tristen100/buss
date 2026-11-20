@@ -1067,7 +1067,7 @@ function setMe(ll,center){
  if(!inArea(ll)){if(!outside){outside=true;toast('Oled Tallinnast väljas. Näitan teid kesklinnast.')}return}
  const first=!state.me;state.me=ll;
  if(meMk){meMk.setLngLat(ll);meMk.getElement().style.display=''}
- if(first){LS.set('buss-loc','1');if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
+ if(first){LS.set('buss-loc','1');if(state.view==='results'&&!state.from&&state.to)go('results',{fresh:true});if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
  if(center&&map)map.easeTo({center:ll,zoom:16,padding:pad(),duration:RM?0:700});
 }
 function locate(ask){
@@ -1220,7 +1220,7 @@ function showTut(){
 }
 function endTut(){$('#tut').classList.remove('on');LS.set('buss-tut','1')}
 $('#tutNext').onclick=()=>{const s=tutL[tutI];if(s.loc){locate(true);endTut();return}if(tutI<tutL.length-1){tutI++;showTut()}else endTut()};
-$('#tutSkip').onclick=endTut;
+$('#tutSkip').onclick=()=>{const loc=tutL[tutI].loc;endTut();if(!loc)locate(false)}; // skipped the tour: still ask for the location ("Hiljem" on the location step: next visit)
 addEventListener('keydown',e=>{if($('#tut').classList.contains('on')){if(e.key==='Escape')endTut();if(e.key==='ArrowRight'||e.key==='Enter'){e.preventDefault();$('#tutNext').click()}}});
 addEventListener('resize',()=>{if($('#tut').classList.contains('on'))setTimeout(showTut,150)});
 
@@ -1236,7 +1236,9 @@ renderHome();setSheet(snapFor('home'),true);lens();syncRun();
 loadData().then(()=>{renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
-(async()=>{try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p&&p.state==='granted'||LS.get('buss-loc')==='1'&&!p)locate(false)}catch(e){}})();
+/* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */
+(async()=>{let st='prompt';try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;p.onchange=()=>{if(p.state==='granted')locate(false)}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
+ if(st==='granted')locate(false);else if(st==='prompt'&&LS.get('buss-tut')==='1')setTimeout(()=>locate(false),700)})();
 ping('open');
 if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
 else{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
