@@ -1,5 +1,5 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR } from './router.js?v=a637d4cf';
+import { Router, decodePoly, DETOUR } from './router.js?v=0fea4287';
 import { siri, delaysFor, vehicles } from './live.js?v=9374c404';
 "use strict";
 /* ================= icons ================= */
@@ -52,7 +52,8 @@ Object.assign(I,{
  ext:`<svg viewBox="0 0 24 24" ${S}><path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8.5A1.5 1.5 0 0 1 6 7h4.5"/></svg>`
 });
 document.querySelectorAll('[data-i]').forEach(el=>{el.innerHTML=I[el.dataset.i]||''});
-const MODE={bus:'Buss',tram:'Tramm',trol:'Troll',train:'Rong',walk:'Kõnni',run:'Jookse',jog:'Sörgi'};
+I.reg=I.bus;
+const MODE={bus:'Buss',reg:'Maakonnabuss',tram:'Tramm',trol:'Troll',train:'Rong',walk:'Kõnni',run:'Jookse',jog:'Sörgi'};
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const isDesk=()=>matchMedia('(min-width: 900px)').matches;
@@ -611,7 +612,7 @@ function renderRoute(){
  $$('#routeBody .starbtn').forEach(b=>b.onclick=()=>openSave(PK.get(b.dataset.star),b));
 }
 
-const ATTR='<div class="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · sõiduandmed transport.tallinn.ee · aadressid Maa-amet, Photon</div>';
+const ATTR='<div class="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · sõiduandmed transport.tallinn.ee, peatus.ee · aadressid Maa-amet, Photon</div>';
 
 /* ================= home: departures near you ================= */
 let nearT=0,NEAR=[];
@@ -623,16 +624,26 @@ async function loadNear(force){
  const st=ns[0];$('#nearSub').innerHTML=`${esc(stopName(st[0]))} · ${fmtM(st[1]*DETOUR)}${state.me?'':` · <button class="lnk" id="askLoc">luba asukoht</button>`}`;
  const ab=$('#askLoc');if(ab)ab.onclick=()=>locate(true);
  const rows=[];let now=null;
- await Promise.all(ns.map(async([s,d])=>{try{const r=await siri(TT.stops.siri[s],force?0:20000);now=now??r.now;for(const [k,v] of RT.matchSiri(s,r.rows,ymd))DELAYS.set(k,v);for(const x of r.rows)rows.push({...x,stop:s,d})}catch(e){}}));
- if(now==null){$('#near').innerHTML='<div class="note">Live-aegu ei saanud. Proovin uuesti.</div>';return}
+ let tried=0;
+ await Promise.all(ns.map(async([s,d])=>{if(!TT.stops.siri[s])return;tried++;try{const r=await siri(TT.stops.siri[s],force?0:20000);now=now??r.now;for(const [k,v] of RT.matchSiri(s,r.rows,ymd))DELAYS.set(k,v);for(const x of r.rows)rows.push({...x,stop:s,d})}catch(e){}}));
+ // county buses and trains have no live feed: their timetable times
+ const nowS=now??Math.round(clock().min*60),plan=planNear(ns,ymd,nowS);rows.push(...plan);
+ if(now==null&&tried&&!plan.length){$('#near').innerHTML='<div class="note">Live-aegu ei saanud. Proovin uuesti.</div>';return}
+ now=nowS;
  const seen=new Set();
  NEAR=rows.filter(r=>r.exp>=now-20).sort((a,b)=>a.exp-b.exp).filter(r=>{const k=r.mode+r.route+r.head;if(seen.has(k))return false;seen.add(k);return true}).slice(0,5);
  $('#liveClock').textContent=hm(now/60);
- $('#near').innerHTML=NEAR.length?NEAR.map((d,i)=>{const dl=Math.round((d.exp-d.sched)/60),stt=dl>=1?`<span class="st-late">hilineb ${dl} min</span>`:dl<=-1?`<span class="st-early">${-dl} min varem</span>`:'<span class="st-ok">graafikus</span>',mn=Math.max(0,Math.round((d.exp-now)/60));
+ $('#near').innerHTML=NEAR.length?NEAR.map((d,i)=>{const dl=Math.round((d.exp-d.sched)/60),stt=d.plan?'<span class="st-ok">sõiduplaani järgi</span>':dl>=1?`<span class="st-late">hilineb ${dl} min</span>`:dl<=-1?`<span class="st-early">${-dl} min varem</span>`:'<span class="st-ok">graafikus</span>',mn=Math.max(0,Math.round((d.exp-now)/60));
   return`<button class="dep" data-i="${i}"><span class="lg ${d.mode}">${I[d.mode]||I.bus}${esc(d.route)}</span><span class="to">${esc(d.head)}<small>${MODE[d.mode]||'Buss'} · ${esc(stopName(d.stop))}</small></span><span class="when">${mn?mn+' min':'kohe'}<small>${stt}</small></span></button>`}).join(''):'<div class="note">Lähima tunni jooksul väljumisi pole.</div>';
  $$('#near .dep').forEach(b=>b.onclick=()=>{const d=NEAR[+b.dataset.i],sl=stopLL(d.stop);
   let v=null,bd=1e9;for(const x of VEHS){if(x.route!==d.route||x.mode!==d.mode)continue;const dd=m(x.ll,sl);if(dd<bd){bd=dd;v=x}}
   if(!map)return;const ll=v?(v.cur||v.ll):sl;map.easeTo({center:ll,zoom:15.6,padding:pad(),duration:RM?0:800});if(v)setTimeout(()=>vehPopup(v),RM?0:820)});
+}
+function planNear(ns,ymd,nowS){
+ const day=RT.day(ymd),out=[],R=TT.routes;
+ for(const [s,d] of ns)for(const [pi,i] of RT.byStop[s]){const p=TT.pats[pi],r=R[p.r];if(r[1]!=='reg'&&r[1]!=='train'||p.nbS?.has(i))continue;
+  for(const tr of day[pi]){const t=(tr.t0+tr.pr[i])*60;if(t<nowS-20)continue;if(t>nowS+3600)break;out.push({mode:r[1],route:r[0],exp:t,sched:t,head:p.h,stop:s,d,plan:1});break}}
+ return out;
 }
 function renderHome(){renderFavChips();renderRecent();loadNear()}
 function renderRecent(){
@@ -1234,7 +1245,7 @@ function maybeInstall(){
 
 /* ================= first-time guide ================= */
 const TUT=[
- {t:'Tere tulemast',p:'Siit leiad kiireima tee Tallinnas: buss, tramm, troll ja kõnd, live-aegadega otse transport.tallinn.ee-st.'},
+ {t:'Tere tulemast',p:'Siit leiad kiireima tee Tallinnas ja selle ümber: buss, tramm, troll, maakonnabuss, Elroni rong ja kõnd. Linnaliinid live-aegadega otse transport.tallinn.ee-st.'},
  {el:'#openSearch',t:'Kuhu lähed?',p:'Kirjuta aadress, koha või peatuse nimi. Näitan mitut teed ja millal kohale jõuad. Lahkumise või kohalejõudmise aja saad ise valida.'},
  {el:'#near',t:'Lähedal',p:'Väljumised lähimatest peatustest, hilinemised kohe näha. Puuduta rida ja näed sõidukit kaardil.'},
  {el:'#grab',phone:1,t:'Lohista riba',p:'Tõmba riba alla, kui tahad kaarti näha, ja üles, kui tahad rohkem näha. Seaded sulgevad samamoodi.'},

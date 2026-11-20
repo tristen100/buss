@@ -1,4 +1,4 @@
-// Trip planner: RAPTOR over Tallinn's timetable (public/data/tt.json), minutes since local midnight.
+// Trip planner: RAPTOR over Tallinn's timetable plus county buses and Elron (public/data/tt.json), minutes since local midnight.
 // Live delays (from transport.tallinn.ee SIRI) are passed in per trip, so a route is chosen by expected times.
 // Plain ES module with no DOM, so the comparison tests run it in Node too.
 
@@ -17,6 +17,8 @@ export class Router {
     this.n = n;
     this.ll = Array.from({ length: n }, (_, i) => [S.lon[i] / 1e5, S.lat[i] / 1e5]);
     this.byStop = Array.from({ length: n }, () => []);
+    // nb / na: stops of a pattern where you may not get on / off (long-distance lines in Tallinn)
+    tt.pats.forEach(p => { p.nbS = p.nb && new Set(p.nb); p.naS = p.na && new Set(p.na); });
     tt.pats.forEach((p, pi) => p.s.forEach((s, i) => { if (i < p.s.length - 1) this.byStop[s].push([pi, i]); }));
     // stops near each other (grid of ~500 m cells)
     const cell = s => [Math.floor(this.ll[s][0] * KX / 500), Math.floor(this.ll[s][1] * KY / 500)];
@@ -93,12 +95,12 @@ export class Router {
         let tr = null, bi = -1;
         for (let i = i0; i < S.length; i++) {
           const s = S[i];
-          if (tr) {
+          if (tr && !p.naS?.has(i)) {
             const arr = tr.t0 + tr.pr[i] + dly(tr);
             if (arr < Math.min(best[s], tgt)) { cur[s] = arr; best[s] = arr; P[s] = { k: "ride", pi, tr, i0: bi, i1: i }; newly.add(s); }
           }
           const ready = prev[s] + BOARD;
-          if (ready === Infinity || i === S.length - 1) continue;
+          if (ready === Infinity || i === S.length - 1 || p.nbS?.has(i)) continue;
           if (!tr || ready <= tr.t0 + tr.pr[i] + dly(tr)) {
             const c = this.catch(list, i, ready, dly);
             if (c && (!tr || c.t0 + c.pr[i] + dly(c) < tr.t0 + tr.pr[i] + dly(tr))) { tr = c; bi = i; }

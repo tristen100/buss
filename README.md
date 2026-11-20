@@ -4,7 +4,7 @@ The fastest way across Tallinn by bus, tram and trolley, with live times. Made b
 
 **Live:** https://buss.veebi.dev
 
-- Plans trips over the Tallinn timetable (GTFS) with a RAPTOR search in the browser, then corrects them with live
+- Plans trips over the Tallinn timetable (GTFS) plus county buses and Elron trains around Tallinn (national GTFS) with a RAPTOR search in the browser, then corrects them with live
   departures (SIRI) from transport.tallinn.ee and plans again.
 - **Jõua kiiremini** (get there sooner): finds trips that need a short jog or run to catch an earlier bus, and gives
   each walk the slowest pace that still makes it (walk, jog or run, speeds are yours to set).
@@ -23,11 +23,12 @@ The fastest way across Tallinn by bus, tram and trolley, with live times. Made b
 | `worker/index.js` | Cloudflare Worker: static files and a proxy for the vehicle feed |
 
 ```bash
-node tools/build-data.mjs        # fresh timetable from transport.tallinn.ee
+node tools/build-data.mjs        # fresh timetables from transport.tallinn.ee and the national feed
 node tools/stamp.mjs
 npx wrangler@4 dev               # local
 npx wrangler@4 deploy
 ```
 
-Data: transport.tallinn.ee (timetable and live), Maa-amet In-ADS and Photon (addresses), OpenStreetMap and
+Data: transport.tallinn.ee (timetable and live), peatus.ee national GTFS (Regionaal- ja Põllumajandusministeerium,
+via eu-gtfs.remix.com; county buses and trains), Maa-amet In-ADS and Photon (addresses), OpenStreetMap and
 OpenFreeMap (map). MIT licence.
