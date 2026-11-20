@@ -5,6 +5,7 @@ import { siri, delaysFor, vehicles } from './live.js?v=9374c404';
 /* ================= icons ================= */
 const S='fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const I={
+ refresh:`<svg viewBox="0 0 24 24" ${S}><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
  search:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>`,
  back:`<svg viewBox="0 0 24 24" width="22" height="22" ${S}><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>`,
  swap:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><path d="M8 19V5M4.5 8.5 8 5l3.5 3.5M16 5v14m3.5-3.5L16 19l-3.5-3.5"/></svg>`,
@@ -382,19 +383,59 @@ function placeAll(){
 /* ================= live vehicles (gps.txt every 5 s) ================= */
 let tagOcc=null,lastTag=0;
 let VEHS=[],KEYV=[],vehT=0,lastPoll=0;
-const PREV=new Map(); // id -> {from,to,t}
+/* ===== moving vehicles =====
+   gps.txt changes only every 5-10 s and has no speed. Each vehicle is matched to its line's shape (by the feed's
+   bearing), its speed comes from its last two fixes, and between fixes it drives on along the road at that speed,
+   a few seconds ahead to make up for the feed's delay. It waits at the next stop until a fix shows it went past,
+   new fixes are eased in (never backwards unless far off). Off its shape: straight-line guess. Less motion: raw fixes. */
+const MOV=new Map(),LAG=3,HORIZ=14;
+let PATS_BY=null;
+function patsFor(mode,name){if(!PATS_BY){PATS_BY=new Map();TT.pats.forEach((p,pi)=>{const r=TT.routes[p.r],k=r[1]+'|'+r[0];if(!PATS_BY.has(k))PATS_BY.set(k,[]);PATS_BY.get(k).push(pi)})}return PATS_BY.get(mode+'|'+name)||[]}
+function projQ(Q,ll){let best=1e18,bd=0;for(let i=1;i<Q.p.length;i++){const a=Q.p[i-1],b=Q.p[i],ax=(a[0]-ll[0])*KX,ay=(a[1]-ll[1])*KY,dx=(b[0]-a[0])*KX,dy=(b[1]-a[1])*KY,L2=dx*dx+dy*dy;let t=L2?-(ax*dx+ay*dy)/L2:0;t=t<0?0:t>1?1:t;const px=ax+dx*t,py=ay+dy*t,o=px*px+py*py;if(o<best){best=o;bd=Q.c[i-1]+(Q.c[i]-Q.c[i-1])*t}}return{d:bd,off:Math.sqrt(best)}}
+const angD=(a,b)=>Math.abs(((a-b)%360+540)%360-180);
+function matchShape(o,prev){
+ if(!TT||!SHAPES)return null;let best=null;
+ for(const pi of patsFor(o.mode,o.route)){const Q=shapeQ(pi);if(!Q)continue;const p=projQ(Q,o.ll);if(p.off>45)continue;
+  let sc=p.off;if(Number.isFinite(o.brg)){const a=angD(at(Q,p.d).brg,o.brg);sc+=a>100?90:a/3}
+  if(prev&&prev.pi===pi&&p.d>=prev.fd-30)sc-=15;
+  if(!best||sc<best.sc)best={pi,Q,d:p.d,sc}}
+ return best;
+}
+function nextStop(s){const ds=stopDs(s.pi);if(!ds)return s.Q.L;for(const x of ds)if(x>s.fd+15)return x;return s.Q.L}
+function onFix(o,now){
+ let s=MOV.get(o.id);const raw=o.ll[0]+','+o.ll[1];
+ if(s&&s.raw===raw)return;
+ const mt=matchShape(o,s);
+ if(!s){s={ft:now,v:0,ll:o.ll.slice(),fx:o.ll,lt:now};MOV.set(o.id,s);if(mt){s.pi=mt.pi;s.Q=mt.Q;s.d=s.fd=mt.d;s.ll=at(mt.Q,mt.d).ll;s.cap=nextStop(s)}s.raw=raw;return}
+ const dt=Math.max(1,(now-s.ft)/1000);
+ if(mt&&s.Q&&s.pi===mt.pi){const v=mt.d<s.fd?0:Math.min(22,(mt.d-s.fd)/dt);s.v=s.v?s.v*.4+v*.6:v;s.fd=mt.d;if(s.d<mt.d-150||s.d>mt.d+150)s.d=mt.d}
+ else if(mt){s.pi=mt.pi;s.Q=mt.Q;s.fd=mt.d;s.d=mt.d;s.v=Math.min(22,m(s.fx,o.ll)/dt)*.8}
+ else{s.pi=null;s.Q=null;s.v=Math.min(22,m(s.fx,o.ll)/dt);s.vx=(o.ll[0]-s.fx[0])/dt;s.vy=(o.ll[1]-s.fx[1])/dt;if(s.v<.5)s.vx=s.vy=0}
+ if(s.Q)s.cap=nextStop(s);
+ s.ft=now;s.fx=o.ll;s.raw=raw;
+}
+function movPos(id,now,raw){
+ const s=MOV.get(id);if(!s||RM)return raw;
+ const age=Math.min((now-s.ft)/1000+LAG,HORIZ),dtf=Math.min(1,Math.max(0,now-s.lt)/1000),k=1-Math.exp(-dtf/.6);s.lt=now;
+ if(s.Q){
+  const target=Math.min(s.cap??s.Q.L,s.fd+s.v*age);
+  if(target>s.d)s.d+=(target-s.d)*k;else if(s.d-target>40)s.d-=Math.min(s.d-target,4*dtf);
+  const a=at(s.Q,s.d);s.ll=a.ll;s.brg=a.brg;return s.ll}
+ const t=Math.min(age,8),tx=s.fx[0]+(s.vx||0)*t,ty=s.fx[1]+(s.vy||0)*t;
+ s.ll=[s.ll[0]+(tx-s.ll[0])*k,s.ll[1]+(ty-s.ll[1])*k];return s.ll;
+}
 async function pollVeh(){
  clearTimeout(vehT);
- if(document.hidden){vehT=setTimeout(pollVeh,5000);return}
+ if(document.hidden){vehT=setTimeout(pollVeh,3000);return}
  try{
-  const v=await vehicles();const now=performance.now();
-  for(const o of v){const p=PREV.get(o.id);const cur=p?lerpLL(p,now):o.ll;PREV.set(o.id,{from:cur,to:o.ll,t:now})}
+  const v=await vehicles();const now=performance.now(),seen=new Set();
+  for(const o of v){onFix(o,now);seen.add(o.id)}
+  for(const id of MOV.keys())if(!seen.has(id))MOV.delete(id);
   VEHS=v;lastPoll=Date.now();keyVehicles();
  }catch(e){}
- vehT=setTimeout(pollVeh,5000);
+ vehT=setTimeout(pollVeh,3000);
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastPoll>5000)pollVeh()});
-function lerpLL(p,now){const k=Math.min(1,(now-p.t)/(RM?1:1500));return[p.from[0]+(p.to[0]-p.from[0])*k,p.from[1]+(p.to[1]-p.from[1])*k]}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastPoll>3000)pollVeh()});
 
 /* the vehicles of the chosen route: the one coming to your stop, with its delay; and where the timetable says it should be */
 function keyVehicles(){
@@ -437,10 +478,10 @@ function tick(now){
   lastFrame=now;
   const focus=(state.view==='route'||state.view==='results')&&ROUTES[state.sel],lines=focus?new Set(ROUTES[state.sel].legs.filter(l=>l.n).map(l=>l.m+l.n)):null;
   const feats=[];
-  for(const v of VEHS){if(VEHSKIP.has(v.id))continue;const p=PREV.get(v.id),ll=p?lerpLL(p,now):v.ll;v.cur=ll;
+  for(const v of VEHS){if(VEHSKIP.has(v.id))continue;const ll=movPos(v.id,now,v.ll);v.cur=ll;
    feats.push({type:'Feature',properties:{id:v.id,n:v.route,col:col(v.mode),dim:lines&&!lines.has(v.mode+v.route)?1:0,key:0},geometry:{type:'Point',coordinates:ll}})}
   map.getSource('veh').setData({type:'FeatureCollection',features:feats});
-  for(const k of KEYV)if(k.mk&&k.v){const p=PREV.get(k.v.id);if(p){k.ll=lerpLL(p,now);k.mk.setLngLat(k.ll)}}
+  for(const k of KEYV)if(k.mk&&k.v){k.ll=movPos(k.v.id,now,k.v.ll);k.mk.setLngLat(k.ll);const b=MOV.get(k.v.id)?.brg;if(b!=null&&k.el)k.el.style.setProperty('--b',b+'deg')}
   if(now-lastTag>350){lastTag=now;placeTags()}
   runDash(now);
  }
@@ -574,7 +615,7 @@ const ATTR='<div class="attr">© <a href="https://www.openstreetmap.org/copyrigh
 
 /* ================= home: departures near you ================= */
 let nearT=0,NEAR=[];
-async function loadNear(){
+async function loadNear(force){
  clearTimeout(nearT);nearT=setTimeout(loadNear,20000);
  if(!RT||document.hidden||state.view!=='home')return;
  const c=state.me||DEF_LL,ns=RT.near(c,500).slice(0,10),ymd=clock().ymd;
@@ -582,7 +623,7 @@ async function loadNear(){
  const st=ns[0];$('#nearSub').innerHTML=`${esc(stopName(st[0]))} · ${fmtM(st[1]*DETOUR)}${state.me?'':` · <button class="lnk" id="askLoc">luba asukoht</button>`}`;
  const ab=$('#askLoc');if(ab)ab.onclick=()=>locate(true);
  const rows=[];let now=null;
- await Promise.all(ns.map(async([s,d])=>{try{const r=await siri(TT.stops.siri[s]);now=now??r.now;for(const [k,v] of RT.matchSiri(s,r.rows,ymd))DELAYS.set(k,v);for(const x of r.rows)rows.push({...x,stop:s,d})}catch(e){}}));
+ await Promise.all(ns.map(async([s,d])=>{try{const r=await siri(TT.stops.siri[s],force?0:20000);now=now??r.now;for(const [k,v] of RT.matchSiri(s,r.rows,ymd))DELAYS.set(k,v);for(const x of r.rows)rows.push({...x,stop:s,d})}catch(e){}}));
  if(now==null){$('#near').innerHTML='<div class="note">Live-aegu ei saanud. Proovin uuesti.</div>';return}
  const seen=new Set();
  NEAR=rows.filter(r=>r.exp>=now-20).sort((a,b)=>a.exp-b.exp).filter(r=>{const k=r.mode+r.route+r.head;if(seen.has(k))return false;seen.add(k);return true}).slice(0,5);
@@ -1001,16 +1042,16 @@ function swap(){
 
 /* ================= sheet (phone): drag the top bar. Down to a small bar, up to full height; Seaded and search close when dragged down ================= */
 const sheet=$('#sheet'),sbody=$('#sbody');
-const MINV=78;
+const dockH=()=>!isDesk()&&state.view==='home'?66:0,minV=()=>dockH()?92:78;
 const full=()=>state.view==='search'||state.view==='settings';
 function sheetH(){const top=full()?10:state.view==='home'?80:104;return innerHeight-top-8}
 function snapFor(v){const H=innerHeight;return v==='search'||v==='settings'?sheetH():v==='home'?Math.min(400,H*.48):v==='results'?Math.round(H*.56):Math.round(Math.min(H*.5,420))}
 function setSheet(V,instant){
  if(isDesk()){sheet.style.height='';sheet.style.transform='';sbody.style.height='';state.V=0;document.body.classList.remove('tall','mini');return}
- const H=sheetH();V=Math.max(MINV,Math.min(H,V));state.V=V;
+ const H=sheetH();V=Math.max(minV(),Math.min(H,V));state.V=V;
  if(instant)sheet.classList.add('dragging');
- sheet.style.height=H+'px';sheet.style.transform=`translateY(${H-V}px)`;sbody.style.height=Math.max(0,V-26)+'px';tallChk(V);
- document.body.classList.toggle('mini',V<=MINV+2);
+ sheet.style.height=H+'px';sheet.style.transform=`translateY(${H-V}px)`;sbody.style.height=Math.max(0,V-26-dockH())+'px';tallChk(V);
+ document.body.classList.toggle('mini',V<=minV()+2);
  if(instant)requestAnimationFrame(()=>sheet.classList.remove('dragging'));
  if(LBL.length)schedPlace(instant?30:420);
 }
@@ -1025,8 +1066,8 @@ function dMove(e){
  const now=performance.now();if(now-drag.lt>0){drag.vy=(e.clientY-drag.ly)/(now-drag.lt)*.6+drag.vy*.4;drag.ly=e.clientY;drag.lt=now}
  if(drag.moved<4)return;
  const H=sheetH();let V=drag.V-dy;
- if(full()){V=Math.min(H,V);V=Math.max(H*.25,V)}else{V=Math.min(H,V);if(V<MINV)V=MINV-(MINV-V)*.25}
- state.V=V;sheet.style.transform=`translateY(${H-V}px)`;sbody.style.height=Math.max(0,V-26)+'px';tallChk(V);
+ if(full()){V=Math.min(H,V);V=Math.max(H*.25,V)}else{V=Math.min(H,V);if(V<minV())V=minV()-(minV()-V)*.25}
+ state.V=V;sheet.style.transform=`translateY(${H-V}px)`;sbody.style.height=Math.max(0,V-26-dockH())+'px';tallChk(V);
 }
 function tallChk(V){document.body.classList.toggle('tall',innerHeight-8-V<(state.view==='home'?196:218))}
 function dEnd(){
@@ -1036,20 +1077,23 @@ function dEnd(){
   if(d.moved>=4&&(H-V>110||d.vy>.6)){if(state.view==='settings')closeSettings();else go(state.to&&state.list.length?'results':'home');return}
   setSheet(H);return;
  }
- const pk=snapFor(state.view),snaps=[MINV,pk,H];
+ const pk=snapFor(state.view),snaps=[minV(),pk,H];
  let to;
- if(d.moved<4){to=V<=MINV+2?pk:V>pk+20?pk:H}
- else if(Math.abs(d.vy)>.5){const up=d.vy<0;to=up?snaps.find(s=>s>V+8)??H:[...snaps].reverse().find(s=>s<V-8)??MINV}
+ if(d.moved<4){to=V<=minV()+2?pk:V>pk+20?pk:H}
+ else if(Math.abs(d.vy)>.5){const up=d.vy<0;to=up?snaps.find(s=>s>V+8)??H:[...snaps].reverse().find(s=>s<V-8)??minV()}
  else to=snaps.reduce((a,b)=>Math.abs(b-V)<Math.abs(a-V)?b:a);
  setSheet(to);
 }
 const grab=$('#grab');
 for(const el of [grab,...$$('.shead')])el.addEventListener('pointerdown',dStart);
 addEventListener('pointermove',dMove);addEventListener('pointerup',dEnd);addEventListener('pointercancel',dEnd);
-grab.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();const H=sheetH();if(full()){if(state.view==='settings')closeSettings();else go('home');return}setSheet(state.V<=MINV+2?snapFor(state.view):state.V<H-10?H:MINV)}});
+grab.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();const H=sheetH();if(full()){if(state.view==='settings')closeSettings();else go('home');return}setSheet(state.V<=minV()+2?snapFor(state.view):state.V<H-10?H:minV())}});
 
 /* ================= controls ================= */
 $('#openSearch').onclick=()=>{state.from=null;go('search')};
+function placeSearch(){const b=$('#openSearch'),dock=!isDesk();b.classList.toggle('glass',!dock);if(dock){if(b.parentNode!==$('#sdock'))$('#sdock').prepend(b)}else if(b.parentNode!==$('.top'))$('.top').prepend(b)}
+placeSearch();matchMedia('(min-width: 900px)').addEventListener('change',()=>{placeSearch();setSheet(snapFor(state.view),true);lens(true)});
+$('#refresh').onclick=()=>{const b=$('#refresh');b.classList.remove('spin');void b.offsetWidth;b.classList.add('spin');pollVeh();loadNear(true);if(state.view==='results'||state.view==='route')compute({})};
 $('#sBack').onclick=()=>go('home');
 $('#ftBack').onclick=()=>go(state.view==='route'?'results':'home');
 $('#rBack').onclick=()=>go('results');
@@ -1243,4 +1287,4 @@ ping('open');
 if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
 else{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
-window.BUSS={get map(){return map},state,ROUTES,get RT(){return RT}}; // for tests in the browser console
+window.BUSS={get map(){return map},state,ROUTES,get RT(){return RT},MOV,get VEHS(){return VEHS}}; // for tests in the browser console

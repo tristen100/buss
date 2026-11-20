@@ -607,3 +607,17 @@ body.mini .fabs{opacity:1;pointer-events:auto}
   .tbox{left:50%;right:auto;width:400px;margin-left:-200px}
 }
 @media (prefers-reduced-motion:reduce){.tring,.tbox,.tut{transition:none}}
+
+/* phones: "Kuhu?" sits at the top of the bottom sheet (thumb reach); when the sheet is down, a refresh button beside it */
+.sdock{display:none}
+@media (max-width:899px){
+  body[data-view=home] .sdock{display:flex;gap:10px;align-items:center;flex:none;padding:0 12px 12px}
+  .sdock .searchpill{background:var(--well);box-shadow:none;border:0}
+  .refbtn{display:none;width:54px;height:54px;border-radius:50%;place-items:center;flex:none;background:var(--well);color:var(--text)}
+  .refbtn svg{width:22px;height:22px}
+  .refbtn.spin svg{animation:refspin .8s var(--ease)}
+  body.mini .refbtn{display:grid}
+  .top .setbtn{margin-left:auto}
+}
+@keyframes refspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.refbtn.spin svg{animation:none}}

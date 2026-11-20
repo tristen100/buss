@@ -6,9 +6,9 @@ export default {
     const url = new URL(req.url);
     if (url.hostname.startsWith("www.")) return Response.redirect("https://buss.veebi.dev" + url.pathname + url.search, 301);
     if (url.pathname === "/api/gps") {
-      if (Date.now() - last.at > 3000) {
+      if (Date.now() - last.at > 2000) {
         try {
-          const r = await fetch("https://transport.tallinn.ee/gps.txt", { cf: { cacheTtl: 3 } });
+          const r = await fetch("https://transport.tallinn.ee/gps.txt", { cf: { cacheTtl: 2 } });
           if (r.ok) last = { at: Date.now(), body: await r.text() };
         } catch (e) { /* keep the last copy */ }
       }
