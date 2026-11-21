@@ -644,3 +644,8 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 .alarmbar button{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--text-2)}
 .alarmbar button svg{width:14px;height:14px}
 @media (min-width:900px){.alarmbar{top:24px}}
+
+/* "Kust" field: tap the from line, your-location row, help when location is blocked */
+.fromto .ft-lines>div{cursor:pointer}
+.place.on .pn b{color:var(--bus)}
+.note.lochelp{margin:-2px 8px 8px 60px;font-size:13px;line-height:1.45}

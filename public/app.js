@@ -696,11 +696,12 @@ async function geocode(q){
 }
 let gq=0,gT=0;
 function renderPlaces(){
- const raw=$('#q').value.trim(),q=norm(raw),has=t=>norm(t||'').includes(q);
+ const inp=FIELD==='from'?$('#fromIn'):$('#q'),raw=(FIELD==='from'&&inp.value===fromName()?'':inp.value).trim(),q=norm(raw),has=t=>norm(t||'').includes(q);
  const mark=n=>{const i=q?norm(n).indexOf(q):-1;return i<0?esc(n):esc(n.slice(0,i))+'<mark>'+esc(n.slice(i,i+q.length))+'</mark>'+esc(n.slice(i+q.length))};
  const row=(p,ic,t,sub,hi)=>{const k=pkey(p);PK.set(k,p);return`<div class="prow"><button class="place ${hi?'hi':''}" data-k="${esc(k)}">${ic}<span class="pn"><b>${t}</b><small>${esc(sub||'')}</small></span><span class="pd">${dTxt(p)}</span></button>${starBtn(p)}</div>`};
  const favs=FAVS.filter(f=>!q||has(f.n)||has(f.p));
  let h='';
+ if(FIELD==='from'&&(!q||has('Sinu asukoht')))h+=meRow();
  if(favs.length)h+='<div class="sect">Lemmikud</div>'+favs.map((f,i)=>row(favPlace(f),`<span class="pi fv">${I[f.ic]}</span>`,mark(f.n),f.a,q&&i===0)).join('');
  if(!q){
   const rest=RECENT.filter(p=>!favOf(p));
@@ -714,14 +715,38 @@ function renderPlaces(){
   if(stops.length)h+='<div class="sect">Peatused</div>'+stops.map((p,i)=>row(p,`<span class="pi">${I.bus}</span>`,mark(p.n),p.s,first&&!geo.length&&i===0)).join('');
   if(!geoCache.has(raw))h+='<div class="note">Otsin aadresse…</div>';
   else if(!favs.length&&!stops.length&&!geo.length)h+=`<div class="sect">Ei leidnud</div><div class="note">Proovi aadressi või koha nime, näiteks „Ülemiste“.</div>`;
-  if(!geoCache.has(raw)){clearTimeout(gT);const my=++gq;gT=setTimeout(()=>geocode(raw).then(()=>{if(my===gq&&$('#q').value.trim()===raw)renderPlaces()}),220)}
+  if(!geoCache.has(raw)){clearTimeout(gT);const my=++gq;gT=setTimeout(()=>geocode(raw).then(()=>{if(my===gq&&inp.value.trim()===raw)renderPlaces()}),220)}
  }
  $('#plist').innerHTML=h;
- $$('#plist .place').forEach(b=>b.onclick=()=>pick(PK.get(b.dataset.k)));
+ $$('#plist .place').forEach(b=>b.onclick=()=>b.dataset.me?pickMe():pick(PK.get(b.dataset.k)));
  $$('#plist .starbtn').forEach(b=>b.onclick=()=>openSave(PK.get(b.dataset.star),b));
+}
+/* the "Kust" field: your location (asks for it when needed) or any place */
+let FIELD='to',LOCST='prompt';
+function locHelp(){
+ return isIOS?'iPhone: Seaded → Privaatsus ja turvalisus → Asukohateenused → Safari veebisaidid → „Rakenduse kasutamise ajal“. Siis ava leht uuesti.'
+  :isAndroid?'Puuduta aadressiriba ees olevat ikooni → Load → Asukoht → Luba. Siis ava leht uuesti.'
+  :'Klõpsa aadressiriba ees oleval ikoonil, luba asukoht ja laadi leht uuesti.';
+}
+function meRow(){
+ const sub=state.me?'Praegune asukoht':LOCST==='denied'?'Asukoha luba on keelatud':'Puuduta, et lubada asukoht';
+ return `<div class="prow"><button class="place${!state.from&&state.me?' on':''}" data-me="1"><span class="pi fv">${I.locate}</span><span class="pn"><b>Sinu asukoht</b><small>${sub}</small></span></button></div>`
+  +(LOCST==='denied'&&!state.me?`<div class="note lochelp">${esc(locHelp())}</div>`:'');
+}
+function setFrom(p){
+ state.from=p;$('#fromIn').value=fromName();$('#ftFrom').textContent=fromName();
+ if(state.to&&!(p&&pkey(p)===pkey(state.to))){FIELD='to';$('#snote').innerHTML='';state.sel=null;SEEN.clear();go('results',{fresh:true})}
+ else{FIELD='to';$('#q').focus();renderPlaces()}
+}
+function pickMe(){
+ if(state.me){setFrom(null);return}
+ if(LOCST==='denied'){renderPlaces();return}
+ $('#fromIn').value='Otsin asukohta…';
+ locate(true,ok=>{if(ok)setFrom(null);else{$('#fromIn').value=fromName();renderPlaces()}});
 }
 function pick(p){
  if(!p)return;
+ if(FIELD==='from'){const r={n:p.n,s:p.s||'',ll:p.ll};const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift(r);RECENT.length=Math.min(RECENT.length,8);saveRecent();setFrom(r);return}
  state.to={n:p.n,s:p.s||'',ll:p.ll};
  const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift({n:p.n,s:p.s||'',ll:p.ll});RECENT.length=Math.min(RECENT.length,8);saveRecent();
  $('#ftTo').textContent=p.n;$('#snote').innerHTML='';state.sel=null;
@@ -777,7 +802,7 @@ $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('o
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
-let tt;function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),2200)}
+let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||2200)}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');
 const resolveT=p=>p==='auto'?(mqDark.matches?'dark':'light'):p;
 function syncSeg(){
@@ -1091,7 +1116,7 @@ function go(v,o={}){
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
  if(v==='home'){renderHome();setSheet(snapFor('home'),o.instant)}
- if(v==='search'){setSheet(snapFor('search'),o.instant);$('#fromIn').value=fromName();renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>$('#q').focus({preventScroll:true}),RM?0:250)}
+ if(v==='search'){setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromName();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
  if(v==='results'){setSheet(snapFor('results'),o.instant);
   if(o.fresh||!state.list.length){state.list=[];renderResults(true);if(map&&map.getSource('rt')){clearRoutes();clearTemp();LBL=[];keyVehicles();fitTo(bboxOf([fromLL(),state.to.ll]),15.6,o.instant)}
    setTimeout(()=>compute({fresh:true,first:true}),RM?0:60)}
@@ -1191,6 +1216,13 @@ $('#sBack').onclick=()=>go('home');
 $('#ftBack').onclick=()=>go(state.view==='route'?'results':'home');
 $('#rBack').onclick=()=>go('results');
 $('#ftSwap').onclick=swap;
+$('#ftFrom').parentNode.onclick=()=>go('search',{field:'from'});
+$('#ftTo').parentNode.onclick=()=>go('search',{field:'to'});
+$('#fromIn').addEventListener('focus',()=>{if(FIELD!=='from'){FIELD='from';renderPlaces()}$('#fromIn').select()});
+$('#fromIn').addEventListener('input',()=>{FIELD='from';$('#snote').innerHTML='';renderPlaces()});
+$('#fromIn').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
+$('#fromIn').addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==$('#fromIn')&&!$('#fromIn').value.trim())$('#fromIn').value=fromName()},200));
+$('#q').addEventListener('focus',()=>{if(FIELD!=='to'){FIELD='to';if(!$('#fromIn').value.trim()||$('#fromIn').value!==fromName())$('#fromIn').value=fromName();renderPlaces()}});
 $('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces()});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
 $('#qclr').onclick=e=>{e.preventDefault();$('#q').value='';renderPlaces();$('#q').focus()};
@@ -1207,9 +1239,12 @@ function setMe(ll,center){
  if(first){LS.set('buss-loc','1');if(state.view==='results'&&!state.from&&state.to)go('results',{fresh:true});if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
  if(center&&map)map.easeTo({center:ll,zoom:16,padding:pad(),duration:RM?0:700});
 }
-function locate(ask){
- if(!navigator.geolocation){if(ask)toast('See brauser ei anna asukohta');return}
- navigator.geolocation.getCurrentPosition(p=>{setMe([p.coords.longitude,p.coords.latitude],ask);watch()},e=>{if(ask)toast(e.code===1?'Asukoha luba puudub. Luba see brauseri seadetes.':'Asukohta ei leitud. Proovi uuesti.')},{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+function locate(ask,cb){
+ if(!navigator.geolocation){if(ask)toast('See brauser ei anna asukohta');cb&&cb(false);return}
+ if(ask&&LOCST==='denied'){toast('Asukoha luba on keelatud. '+locHelp(),9000);cb&&cb(false);return}
+ navigator.geolocation.getCurrentPosition(p=>{LOCST='granted';setMe([p.coords.longitude,p.coords.latitude],ask&&!cb);watch();cb&&cb(!!state.me)},e=>{
+  if(e.code===1){LOCST='denied';LS.set('buss-loc','0');if(state.view==='search')renderPlaces();if(state.view==='home')renderHome()}
+  if(ask)toast(e.code===1?'Asukoha luba on keelatud. '+locHelp():'Asukohta ei leitud. Proovi uuesti.',e.code===1?9000:undefined);cb&&cb(false)},{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
 }
 function watch(){if(watchId==null&&navigator.geolocation)watchId=navigator.geolocation.watchPosition(p=>setMe([p.coords.longitude,p.coords.latitude]),()=>{},{enableHighAccuracy:true,maximumAge:15000})}
 
@@ -1374,7 +1409,7 @@ loadData().then(()=>{loadNotes();if(ALARM)tickAlarm();renderHome();if(state.to)g
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
 /* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */
-(async()=>{let st='prompt';try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;p.onchange=()=>{if(p.state==='granted')locate(false)}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
+(async()=>{let st='prompt';try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
  if(st==='granted')locate(false);else if(st==='prompt'&&LS.get('buss-tut')==='1')setTimeout(()=>locate(false),700)})();
 ping('open');
 if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
