@@ -3,9 +3,9 @@
 // Plain ES module with no DOM, so the comparison tests run it in Node too.
 
 export const KX = 111320 * Math.cos(59.43 * Math.PI / 180), KY = 110574;
-export const DETOUR = 1.25;           // straight line to walking path (measured on Tristen's Roosikrantsi 8c to Balti jaam walk)
+export const DETOUR = 1.37;           // straight line to walking path (mean of 80 real street walks to stops from peatus.ee, 21.11.2026)
 export const BOARD = 1;               // minutes spare at a stop (default; q.board when walking, q.boardFast when jogging/running)
-const ACCESS = 1250, XFER = 420;      // straight-line metres: to/from a stop, between stops
+const ACCESS = 2000, XFER = 600;      // straight-line metres: to/from a stop, between stops (wider finds 1+ min faster trips for ~9%)
 const ROUNDS = 5;
 
 export const dist = (a, b) => Math.hypot((b[0] - a[0]) * KX, (b[1] - a[1]) * KY);
@@ -117,7 +117,7 @@ export class Router {
       const walked = new Set();
       for (const s of newly) for (const [o, d] of this.foot[s]) {
         const t = cur[s] + legT(d);
-        if (!newly.has(o) && t < Math.min(best[o], tgt) && t < cur[o]) { cur[o] = t; best[o] = t; P[o] = { k: "walk", from: s, d }; walked.add(o); }
+        if (t < Math.min(best[o], tgt) && t < cur[o]) { cur[o] = t; best[o] = t; P[o] = { k: "walk", from: s, d }; walked.add(o); }
       }
       marked = new Set([...newly, ...walked]);
       // destination

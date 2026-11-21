@@ -1,5 +1,5 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR } from './router.js?v=fa50067f';
+import { Router, decodePoly, DETOUR } from './router.js?v=46f41170';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
@@ -735,7 +735,7 @@ function meRow(){
 }
 function setFrom(p){
  state.from=p;$('#fromIn').value=fromVal();$('#ftFrom').textContent=fromName();
- if(state.to&&!(p&&pkey(p)===pkey(state.to))){FIELD='to';$('#snote').innerHTML='';state.sel=null;SEEN.clear();go('results',{fresh:true})}
+ if(state.to&&!(p&&pkey(p)===pkey(state.to))){FIELD='to';$('#snote').innerHTML='';state.sel=null;freshLive();go('results',{fresh:true})}
  else{FIELD='to';$('#q').focus();renderPlaces()}
 }
 function pickMe(){
@@ -750,7 +750,7 @@ function pick(p){
  state.to={n:p.n,s:p.s||'',ll:p.ll};
  const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift({n:p.n,s:p.s||'',ll:p.ll});RECENT.length=Math.min(RECENT.length,8);saveRecent();
  $('#ftTo').textContent=p.n;$('#snote').innerHTML='';state.sel=null;
- ping('search');SEEN.clear();
+ ping('search');freshLive();
  go('results',{fresh:true});
  setTimeout(maybeInstall,8000);
 }
@@ -998,7 +998,7 @@ async function compute(o={}){
  clearTimeout(refT);
  if(!RT||!state.to)return;
  const my=++CMP,W=state.when,c=clock(),live=whenLive();
- if(Date.now()-DELAYS_AT>45000){DELAYS=new Map();DELAYS_AT=Date.now()}
+ if(Date.now()-DELAYS_AT>45000)freshLive()
  const ymd=W.k==='now'?c.ymd:addDays(c.ymd,W.day),t=W.k==='now'?c.min:W.t;
  const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,board:P.bw,boardFast:P.bf,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
  const fast=state.run&&W.k==='now';
@@ -1036,7 +1036,7 @@ async function compute(o={}){
  if(state.view==='results'){renderResults(false);drawFor('results',{instant:!o.fresh,keepCam:!o.fresh})}
  else if(state.view==='route'){if(!state.sel){go('results');return}const t=sbody.scrollTop;renderRoute();sbody.scrollTop=t;drawFor('route',{instant:!o.fresh,keepCam:!o.fresh})}
  lens();
- if(W.k==='now'||live)refT=setTimeout(()=>{if(!document.hidden&&(state.view==='results'||state.view==='route')){SEEN.clear();compute()}else refT=setTimeout(()=>compute(),5000)},30000);
+ if(W.k==='now'||live)refT=setTimeout(()=>{if(!document.hidden&&(state.view==='results'||state.view==='route')){freshLive();compute()}else refT=setTimeout(()=>compute(),5000)},30000);
 }
 /* ===== "Mine 5 min pärast": a reminder for one chosen trip =====
    Follows the first ride's live delay (SIRI at its stop, every minute) and tells you 5 minutes before you have to
@@ -1109,7 +1109,10 @@ function alarmBar(){
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&ALARM)tickAlarm()});
 const SEEN=new Set(); // stops whose live departures are in DELAYS for this round
-function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=null;SEEN.clear();go('results',{fresh:true})}
+// new round of live times: forget the old delays and the stops they came from together, so the next compute polls again
+function freshLive(){DELAYS=new Map();DELAYS_AT=Date.now();SEEN.clear()}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(state.view==='results'||state.view==='route')&&whenLive()&&Date.now()-DELAYS_AT>30000){freshLive();compute()}});
+function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=null;freshLive();go('results',{fresh:true})}
 
 /* ================= navigation ================= */
 function go(v,o={}){
@@ -1156,7 +1159,7 @@ function swap(){
  const a=state.from||{n:fromName(),s:'',ll:fromLL(),me:1},b=state.to;
  state.from=b.me?null:b;state.to=a;
  $('#ftFrom').textContent=fromName();$('#ftTo').textContent=state.to.n;
- state.sel=null;SEEN.clear();go('results',{fresh:true});
+ state.sel=null;freshLive();go('results',{fresh:true});
 }
 
 /* ================= sheet (phone): drag the top bar. Down to a small bar, up to full height; Seaded and search close when dragged down ================= */
@@ -1212,7 +1215,7 @@ grab.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDe
 $('#openSearch').onclick=()=>{state.from=null;go('search')};
 function placeSearch(){const b=$('#openSearch'),dock=!isDesk();b.classList.toggle('glass',!dock);if(dock){if(b.parentNode!==$('#sdock'))$('#sdock').prepend(b)}else if(b.parentNode!==$('.top'))$('.top').prepend(b)}
 placeSearch();matchMedia('(min-width: 900px)').addEventListener('change',()=>{placeSearch();setSheet(snapFor(state.view),true);lens(true)});
-$('#refresh').onclick=()=>{const b=$('#refresh');b.classList.remove('spin');void b.offsetWidth;b.classList.add('spin');pollVeh();loadNear(true);if(state.view==='results'||state.view==='route')compute({})};
+$('#refresh').onclick=()=>{const b=$('#refresh');b.classList.remove('spin');void b.offsetWidth;b.classList.add('spin');pollVeh();loadNear(true);if(state.view==='results'||state.view==='route'){freshLive();compute({})}};
 $('#sBack').onclick=()=>go('home');
 $('#ftBack').onclick=()=>go(state.view==='route'?'results':'home');
 $('#rBack').onclick=()=>go('results');
