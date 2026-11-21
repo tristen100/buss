@@ -696,6 +696,7 @@ async function geocode(q){
 }
 let gq=0,gT=0;
 function renderPlaces(){
+ $('#qclr').hidden=!$('#q').value;$('#fclr').hidden=!$('#fromIn').value;
  const inp=FIELD==='from'?$('#fromIn'):$('#q'),raw=(FIELD==='from'&&inp.value===fromName()?'':inp.value).trim(),q=norm(raw),has=t=>norm(t||'').includes(q);
  const mark=n=>{const i=q?norm(n).indexOf(q):-1;return i<0?esc(n):esc(n.slice(0,i))+'<mark>'+esc(n.slice(i,i+q.length))+'</mark>'+esc(n.slice(i+q.length))};
  const row=(p,ic,t,sub,hi)=>{const k=pkey(p);PK.set(k,p);return`<div class="prow"><button class="place ${hi?'hi':''}" data-k="${esc(k)}">${ic}<span class="pn"><b>${t}</b><small>${esc(sub||'')}</small></span><span class="pd">${dTxt(p)}</span></button>${starBtn(p)}</div>`};
@@ -1225,6 +1226,7 @@ $('#fromIn').addEventListener('blur',()=>setTimeout(()=>{if(document.activeEleme
 $('#q').addEventListener('focus',()=>{if(FIELD!=='to'){FIELD='to';if(!$('#fromIn').value.trim()||$('#fromIn').value!==fromName())$('#fromIn').value=fromName();renderPlaces()}});
 $('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces()});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
+$('#fclr').onclick=e=>{e.preventDefault();$('#fromIn').value='';FIELD='from';renderPlaces();$('#fromIn').focus()};
 $('#qclr').onclick=e=>{e.preventDefault();$('#q').value='';renderPlaces();$('#q').focus()};
 $('#locate').onclick=()=>{if(state.me&&map)map.easeTo({center:state.me,zoom:16,padding:pad(),duration:RM?0:700});else locate(true)};
 
