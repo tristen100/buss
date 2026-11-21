@@ -633,3 +633,14 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 .ntc summary svg{width:16px;height:16px;flex:none;margin-top:2px}
 .ntc p{margin:8px 0 0;color:var(--text-2)}
 .ntc a{display:inline-block;margin-top:8px;color:var(--warn);font-weight:600}
+
+/* "Mine 5 min pärast" reminder */
+.alarmbtn{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:10px 14px;border-radius:999px;background:var(--well);color:var(--text);font-weight:600;font-size:.92rem}
+.alarmbtn svg{width:18px;height:18px}
+.alarmbtn.on{background:color-mix(in srgb,var(--bus) 16%,transparent);color:var(--bus)}
+.alarmbar{position:fixed;z-index:60;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 84px);display:flex;align-items:center;gap:8px;padding:6px 6px 6px 14px;border-radius:999px;font-size:.88rem;font-weight:600;color:var(--text);max-width:calc(100vw - 32px);white-space:nowrap}
+.alarmbar svg{width:16px;height:16px;flex:none}
+.alarmbar span{overflow:hidden;text-overflow:ellipsis}
+.alarmbar button{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--text-2)}
+.alarmbar button svg{width:14px;height:14px}
+@media (min-width:900px){.alarmbar{top:24px}}

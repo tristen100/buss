@@ -7,6 +7,7 @@ const S='fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="roun
 const I={
  refresh:`<svg viewBox="0 0 24 24" ${S}><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
  warn:`<svg viewBox="0 0 24 24" ${S}><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg>`,
+ bell:`<svg viewBox="0 0 24 24" ${S}><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>`,
  search:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>`,
  back:`<svg viewBox="0 0 24 24" width="22" height="22" ${S}><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>`,
  swap:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><path d="M8 19V5M4.5 8.5 8 5l3.5 3.5M16 5v14m3.5-3.5L16 19l-3.5-3.5"/></svg>`,
@@ -598,7 +599,7 @@ function stepLive(l){
 }
 function renderRoute(){
  const R=ROUTES[state.sel];if(!R){go('results');return}
- let s=`<div class="dsum">${span(R)}</div><div class="dmeta"><span class="dur">${dur(R)} min</span>${badge(R)}</div><div class="legs">${chips(R)}</div>`;
+ let s=`<div class="dsum">${span(R)}</div><div class="dmeta"><span class="dur">${dur(R)} min</span>${badge(R)}</div>${ALARM&&ALARM.sig===R.sig?`<button class="alarmbtn on" id="alarmBtn">${I.bell}Teavitan ${hm(alarmLeave()-LEAD)} · tühista</button>`:alarmable(R)?`<button class="alarmbtn" id="alarmBtn">${I.bell}Teavita 5 min enne minekut</button>`:''}<div class="legs">${chips(R)}</div>`;
  if(R.runcard)s+=`<div class="runcard ${eff(R)}"><span class="ri">${I[eff(R)]}</span><span class="big">${R.runcard.big}</span><span class="rs">${R.runcard.rs}</span><div class="rf">${R.runcard.rf}</div></div>`;
  const c=clock();
  s+='<ol class="steps">';
@@ -617,6 +618,7 @@ function renderRoute(){
  s+=`<li class="stp stop end"><time>${hm(R.arr)}</time><span class="nd"></span><div class="tx"><div><b>${esc(state.to.n)}</b><small>${fv?esc(fv.n)+' · ':''}${esc(state.to.s||'')}</small></div>${starBtn(state.to)}</div></li></ol>${ATTR}`;
  $('#routeBody').innerHTML=s;
  $$('#routeBody .starbtn').forEach(b=>b.onclick=()=>openSave(PK.get(b.dataset.star),b));
+ const ab=$('#alarmBtn');if(ab)ab.onclick=()=>{if(ALARM&&ALARM.sig===R.sig)clearAlarm();else setAlarm(R)};
 }
 
 const ATTR='<div class="attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · sõiduandmed transport.tallinn.ee, peatus.ee · aadressid Maa-amet, Photon</div>';
@@ -1007,6 +1009,59 @@ async function compute(o={}){
  lens();
  if(W.k==='now'||live)refT=setTimeout(()=>{if(!document.hidden&&(state.view==='results'||state.view==='route')){SEEN.clear();compute()}else refT=setTimeout(()=>compute(),5000)},30000);
 }
+/* ===== "Mine 5 min pärast": a reminder for one chosen trip =====
+   Follows the first ride's live delay (SIRI at its stop, every minute) and tells you 5 minutes before you have to
+   leave: a system notification when allowed, plus a sound-free in-app banner and a buzz. It runs while the app is
+   open (also in the background on Android and computers); there is no server push. */
+const LEAD=5;
+let ALARM=(()=>{try{return JSON.parse(LS.get('buss-alarm')||'null')}catch(e){return null}})(),alarmT=0;
+const alarmNow=()=>{const c=clock();return ALARM&&c.ymd>ALARM.ymd?c.min+1440:c.min};
+const alarmLeave=()=>ALARM.sched+ALARM.delay-ALARM.lead;
+function saveAlarm(){if(ALARM)LS.set('buss-alarm',JSON.stringify(ALARM));else try{localStorage.removeItem('buss-alarm')}catch(e){}}
+function alarmable(R){
+ if(!R||R.run)return false;const W=state.when,c=clock();
+ if(W.k!=='now'&&!(W.k==='dep'&&!W.day))return false;
+ const f=R.j.legs.find(l=>l.m==='ride');return !!f&&R.dep>c.min+.5&&R.dep<c.min+720;
+}
+function setAlarm(R){
+ const f=R.j.legs.find(l=>l.m==='ride'),p=TT.pats[f.pi],r=TT.routes[p.r];
+ ALARM={ymd:clock().ymd,sig:R.sig,key:f.key,stop:f.fromStop,sched:f.sched,delay:f.delay||0,lead:f.a-R.dep,m:r[1],n:r[0],to:state.to.n,fired:0};
+ saveAlarm();
+ const ask=window.Notification&&Notification.permission==='default'?Notification.requestPermission():Promise.resolve();
+ ask.catch(()=>{}).then(()=>{const left=alarmLeave()-LEAD-alarmNow();
+  toast(left>0?`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut. Hoia äpp lahti.`:'Mine kohe!');
+  tickAlarm();if(state.view==='route')renderRoute()});
+}
+function clearAlarm(){ALARM=null;saveAlarm();clearTimeout(alarmT);$('#alarmBar')?.remove();if(state.view==='route')renderRoute()}
+async function tickAlarm(){
+ clearTimeout(alarmT);if(!ALARM)return;
+ if(alarmNow()>alarmLeave()+2){clearAlarm();return}
+ // the first ride's live delay
+ if(RT&&TT.stops.siri[ALARM.stop]&&!ALARM.fired&&alarmLeave()-alarmNow()<60){try{const r=await siri(TT.stops.siri[ALARM.stop],30000);const d=RT.matchSiri(ALARM.stop,r.rows,ALARM.ymd).get(ALARM.key);if(d!=null&&ALARM){ALARM.delay=d;saveAlarm()}}catch(e){}}
+ if(!ALARM)return;
+ const left=alarmLeave()-alarmNow();
+ if(!ALARM.fired&&left<=LEAD+.1){ALARM.fired=1;saveAlarm();fireAlarm(Math.max(0,Math.round(left)))}
+ alarmBar();
+ alarmT=setTimeout(tickAlarm,ALARM.fired?20000:15000);
+}
+function fireAlarm(min){
+ const title=min>=1?`Mine ${min} min pärast`:'Mine kohe',body=`${MODE[ALARM.m]} ${ALARM.n} väljub ${hm(ALARM.sched+ALARM.delay)} peatusest ${stopName(ALARM.stop)} · ${ALARM.to}`;
+ try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+ if(window.Notification&&Notification.permission==='granted'){
+  const o={body,tag:'buss-leave',icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',renotify:true,vibrate:[200,100,200]};
+  (navigator.serviceWorker?navigator.serviceWorker.getRegistration():Promise.resolve(null)).then(r=>r?r.showNotification(title,o):new Notification(title,o)).catch(()=>{try{new Notification(title,o)}catch(e){}});
+ }
+ toast(`${title}: ${body}`);
+}
+// a slim bar on every screen while a reminder is set
+function alarmBar(){
+ if(!ALARM){$('#alarmBar')?.remove();return}
+ let b=$('#alarmBar');if(!b){b=document.createElement('div');b.id='alarmBar';b.className='alarmbar glass';b.setAttribute('role','status');document.body.appendChild(b)}
+ const at=alarmLeave()-LEAD,left=Math.round(alarmLeave()-alarmNow());
+ b.innerHTML=`${I.bell}<span>${ALARM.fired?(left>0?`Mine ${left} min pärast`:'Mine kohe'):`Teavitan ${hm(at)}`} · ${MODE[ALARM.m]} ${esc(ALARM.n)}${ALARM.delay>=1?` <span class="st-late">+${Math.round(ALARM.delay)}</span>`:''}</span><button aria-label="Tühista meeldetuletus">${I.close}</button>`;
+ b.querySelector('button').onclick=clearAlarm;
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&ALARM)tickAlarm()});
 const SEEN=new Set(); // stops whose live departures are in DELAYS for this round
 function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=null;SEEN.clear();go('results',{fresh:true})}
 
@@ -1295,7 +1350,7 @@ $('#appInst').hidden=standalone();
 /* ================= start ================= */
 state.run=LS.get('buss-run')==='1';
 renderHome();setSheet(snapFor('home'),true);lens();syncRun();
-loadData().then(()=>{loadNotes();renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
+loadData().then(()=>{loadNotes();if(ALARM)tickAlarm();renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
 /* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */
