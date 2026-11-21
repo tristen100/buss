@@ -803,7 +803,7 @@ $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('o
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
-let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||2200)}
+let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||2200)}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');
 const resolveT=p=>p==='auto'?(mqDark.matches?'dark':'light'):p;
 function syncSeg(){

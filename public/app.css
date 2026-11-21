@@ -353,8 +353,9 @@ body[data-view=home] .view[data-v=home],body[data-view=search] .view[data-v=sear
 .btn.pri{background:var(--ink);color:var(--on-ink);width:100%}
 .btn.pri svg{width:18px;height:18px;color:var(--run)}
 .dpop .cap{display:block;margin-top:10px;text-align:center}
-.toast{position:fixed;z-index:45;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translate(-50%,20px);opacity:0;padding:11px 16px;border-radius:var(--pill);font-size:13.5px;font-weight:600;white-space:nowrap;transition:opacity .25s,transform .4s var(--spring);pointer-events:none}
+.toast{position:fixed;z-index:45;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translate(-50%,20px);opacity:0;padding:11px 16px;border-radius:var(--pill);font-size:13.5px;font-weight:600;white-space:nowrap;width:max-content;max-width:calc(100vw - 32px);transition:opacity .25s,transform .4s var(--spring);pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.long{white-space:normal;text-align:center;border-radius:18px;line-height:1.4}
 .snack{position:fixed;z-index:46;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translate(-50%,20px);opacity:0;display:flex;align-items:center;gap:14px;padding:6px 6px 6px 18px;border-radius:var(--pill);font-size:14px;font-weight:600;white-space:nowrap;transition:opacity .25s,transform .4s var(--spring);pointer-events:none}
 .snack.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .snack button{height:38px;padding:0 16px;border-radius:var(--pill);background:var(--ink);color:var(--on-ink);font-weight:600}
@@ -648,4 +649,4 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 /* "Kust" field: tap the from line, your-location row, help when location is blocked */
 .fromto .ft-lines>div{cursor:pointer}
 .place.on .pn b{color:var(--bus)}
-.note.lochelp{margin:-2px 8px 8px 60px;font-size:13px;line-height:1.45}
+.note.lochelp{margin:2px 4px 8px;font-size:13px;line-height:1.45}
