@@ -1,5 +1,5 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR } from './router.js?v=764878f0';
+import { Router, decodePoly, DETOUR } from './router.js?v=fa50067f';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
@@ -157,7 +157,7 @@ const state={view:'home',run:false,sel:null,when:{k:'now',day:0,t:17*60+30},them
  themePref:['light','dark'].includes(LS.get('buss-theme'))?LS.get('buss-theme'):'auto',
  glass:!document.documentElement.classList.contains('noglass'),
  regTown:LS.get('buss-reg')==='1', // county buses between two Tallinn stops: off unless turned on
- pace:(()=>{const d={walk:5.5,jog:9,run:12,max:750};try{const x=JSON.parse(LS.get('buss-pace'));if(x&&x.jog&&x.run)return{...d,...x}}catch(e){}return d})(),
+ pace:(()=>{const d={walk:5.5,jog:9,run:12,max:750,bw:1,bf:1};try{const x=JSON.parse(LS.get('buss-pace'));if(x&&x.jog&&x.run)return{...d,...x}}catch(e){}return d})(),
  me:null,from:null,to:null,list:[],best:null,walk:null,busy:false};
 /* favourites and recent places live on the device: {n name, ic icon, p place name, a address, ll [lon,lat]} */
 const loadJ=(k,d)=>{try{const x=JSON.parse(LS.get(k));return Array.isArray(x)?x:d}catch(e){return d}};
@@ -918,14 +918,14 @@ document.addEventListener('keydown',e=>{
 /* phone keyboard: lift the save sheet above it */
 if(window.visualViewport){const vv=visualViewport,kb=()=>{const k=Math.max(0,innerHeight-vv.height-vv.offsetTop);document.documentElement.style.setProperty('--kb',(k>60?k:0)+'px')};vv.addEventListener('resize',kb);vv.addEventListener('scroll',kb)}
 /* walk, jog and run speed in km/h (0,5 steps), each faster than the one before by at least 1 km/h; run limit in 250 m steps */
-const LIM={walk:[3.5,7],jog:[6,11],run:[8,18],max:[250,1500]},STEP={walk:.5,jog:.5,run:.5,max:250};
+const LIM={walk:[3.5,7],jog:[6,11],run:[8,18],max:[250,1500],bw:[0,5],bf:[0,5]},STEP={walk:.5,jog:.5,run:.5,max:250,bw:.5,bf:.5};
 const kmh=v=>String(v).replace('.',','),mss=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;
 function paceRange(k){const P=state.pace,[a,b]=LIM[k];
  return k==='walk'?[a,Math.min(b,P.jog-1)]:k==='jog'?[Math.max(a,P.walk+1),Math.min(b,P.run-1)]:k==='run'?[Math.max(a,P.jog+1),b]:[a,b]}
 function renderPace(){
- for(const k of ['walk','jog','run','max']){const v=state.pace[k],r=$(`.pace[data-k=${k}]`),[lo,hi]=paceRange(k);
-  r.querySelector('output').innerHTML=k==='max'?`${v}<small>m</small>`:`${kmh(v)}<small>km/h</small>`;
-  if(k!=='max')r.querySelector('.mpk').textContent=`${mss(3600/v)} min/km`;
+ for(const k of ['walk','jog','run','max','bw','bf']){const v=state.pace[k],r=$(`.pace[data-k=${k}]`),[lo,hi]=paceRange(k);
+  r.querySelector('output').innerHTML=k==='max'?`${v}<small>m</small>`:k[0]==='b'?`${kmh(v)}<small>min</small>`:`${kmh(v)}<small>km/h</small>`;
+  if(k!=='max'&&k[0]!=='b')r.querySelector('.mpk').textContent=`${mss(3600/v)} min/km`;
   r.querySelector('[data-d="-1"]').disabled=v<=lo;r.querySelector('[data-d="1"]').disabled=v>=hi}
  const t={walk:640/state.pace.walk*3.6,jog:640/state.pace.jog*3.6,run:640/state.pace.run*3.6};
  for(const k in t){const b=$(`.pb.${k}`);b.querySelector('i').style.setProperty('--w',(t[k]/t.walk*100).toFixed(1)+'%');b.querySelector('b').textContent=mss(t[k])}
@@ -1000,7 +1000,7 @@ async function compute(o={}){
  const my=++CMP,W=state.when,c=clock(),live=whenLive();
  if(Date.now()-DELAYS_AT>45000){DELAYS=new Map();DELAYS_AT=Date.now()}
  const ymd=W.k==='now'?c.ymd:addDays(c.ymd,W.day),t=W.k==='now'?c.min:W.t;
- const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
+ const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,board:P.bw,boardFast:P.bf,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
  const fast=state.run&&W.k==='now';
  const run=()=>W.k==='arr'?RT.arriveBy(q):W.k==='last'?RT.lastOne(q):W.k==='first'?RT.firstOne(q):fast?RT.fastPlan(q):RT.plan(q);
  let r=run();

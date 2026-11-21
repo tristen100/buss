@@ -4,7 +4,7 @@
 
 export const KX = 111320 * Math.cos(59.43 * Math.PI / 180), KY = 110574;
 export const DETOUR = 1.25;           // straight line to walking path (measured on Tristen's Roosikrantsi 8c to Balti jaam walk)
-export const BOARD = 0.5;             // minutes kept spare when you walk up to a stop
+export const BOARD = 1;               // minutes spare at a stop (default; q.board when walking, q.boardFast when jogging/running)
 const ACCESS = 1250, XFER = 420;      // straight-line metres: to/from a stop, between stops
 const ROUNDS = 5;
 
@@ -76,7 +76,7 @@ export class Router {
     const trips = this.day(q.ymd), pats = this.tt.pats, n = this.n;
     const vw = q.walk / 3.6 * 60, vf = q.fast ? q.fast / 3.6 * 60 : 0;           // metres per minute
     const legT = (m, eg) => { const p = m * DETOUR; return vf && !eg && p <= q.maxFast ? p / vf : p / vw; };
-    const delays = q.delays || new Map(), rounds = q.rounds || ROUNDS;
+    const delays = q.delays || new Map(), rounds = q.rounds || ROUNDS, bw = q.board ?? BOARD;
     const town = this.town, noReg = !!q.noReg;
     const dly = tr => delays.get(tr.key) || 0;
     const best = new Float64Array(n).fill(Infinity);
@@ -105,7 +105,7 @@ export class Router {
             const arr = tr.t0 + tr.pr[i] + dly(tr);
             if (arr < Math.min(best[s], tgt)) { cur[s] = arr; best[s] = arr; P[s] = { k: "ride", pi, tr, i0: bi, i1: i }; newly.add(s); }
           }
-          const ready = prev[s] + BOARD;
+          const ready = prev[s] + bw;
           if (ready === Infinity || i === S.length - 1 || p.nbS?.has(i)) continue;
           if (!tr || ready <= tr.t0 + tr.pr[i] + dly(tr)) {
             const c = this.catch(list, i, ready, dly);
@@ -163,7 +163,7 @@ export class Router {
     if (!first) return null;
     const lt = l => legT(l.d / DETOUR, l.eg);
     const i0 = legs.indexOf(first);
-    let t = first.a - BOARD;
+    let t = first.a - (q.board ?? BOARD);
     for (let i = i0 - 1; i >= 0; i--) { legs[i].b = t; legs[i].a = t - lt(legs[i]); t = legs[i].a; }
     for (let i = i0 + 1; i < legs.length; i++) if (legs[i].m === "walk") { legs[i].a = legs[i - 1].b; legs[i].b = legs[i].a + lt(legs[i]); }
     return { legs, dep: legs[0].a, arr: legs[legs.length - 1].b, rides: legs.filter(l => l.m === "ride").length };
@@ -226,11 +226,11 @@ export class Router {
       const l = legs[i];
       if (l.m === "ride") { prevEnd = l.b; continue; }
       if (l.eg) { l.a = prevEnd; l.b = l.a + l.d / v("walk"); l.m = "walk"; continue; }
-      const next = legs[i + 1], need = next.a - BOARD, have = need - prevEnd;
+      const next = legs[i + 1], need = next.a - (q.board ?? BOARD), have = need - prevEnd, haveF = next.a - (q.boardFast ?? BOARD) - prevEnd;
       const tw = l.d / v("walk"), tj = l.d / v("jog"), tr = l.d / v("run");
       if (tw <= have) { l.m = "walk"; l.b = need; l.a = i === 0 ? need - tw : prevEnd; l.alt = null; }
-      else if (tj <= have) { l.m = "jog"; l.a = prevEnd; l.b = prevEnd + tj; l.walkAt = prevEnd + tw; fastM += l.d; }
-      else if (tr <= have + 0.05) { l.m = "run"; l.a = prevEnd; l.b = prevEnd + tr; l.walkAt = prevEnd + tw; l.jogAt = prevEnd + tj; fastM += l.d; }
+      else if (tj <= haveF) { l.m = "jog"; l.a = prevEnd; l.b = prevEnd + tj; l.walkAt = prevEnd + tw; fastM += l.d; }
+      else if (tr <= haveF + 0.05) { l.m = "run"; l.a = prevEnd; l.b = prevEnd + tr; l.walkAt = prevEnd + tw; l.jogAt = prevEnd + tj; fastM += l.d; }
       else return null;
       if (i > 0 && legs[i - 1].m !== "ride") return null;
     }
@@ -240,7 +240,7 @@ export class Router {
 
   /* Plan with Jõua kiiremini: search at run pace, then give every walk the pace it really needs. */
   fastPlan(q, want = 5) {
-    const r = this.plan({ ...q, fast: q.run }, want + 4);
+    const r = this.plan({ ...q, fast: q.run, board: Math.min(q.board ?? BOARD, q.boardFast ?? BOARD) }, want + 4);
     const out = [];
     for (const j of r.journeys) { const p = this.pace(j, q); if (p) out.push(p); }
     const n = this.plan({ ...q, fast: 0 }, want);
