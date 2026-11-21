@@ -696,8 +696,7 @@ async function geocode(q){
 }
 let gq=0,gT=0;
 function renderPlaces(){
- $('#qclr').hidden=!$('#q').value;$('#fclr').hidden=!$('#fromIn').value;
- const inp=FIELD==='from'?$('#fromIn'):$('#q'),raw=(FIELD==='from'&&inp.value===fromName()?'':inp.value).trim(),q=norm(raw),has=t=>norm(t||'').includes(q);
+ const inp=FIELD==='from'?$('#fromIn'):$('#q'),raw=(FIELD==='from'&&inp.value===fromVal()?'':inp.value).trim(),q=norm(raw),has=t=>norm(t||'').includes(q);
  const mark=n=>{const i=q?norm(n).indexOf(q):-1;return i<0?esc(n):esc(n.slice(0,i))+'<mark>'+esc(n.slice(i,i+q.length))+'</mark>'+esc(n.slice(i+q.length))};
  const row=(p,ic,t,sub,hi)=>{const k=pkey(p);PK.set(k,p);return`<div class="prow"><button class="place ${hi?'hi':''}" data-k="${esc(k)}">${ic}<span class="pn"><b>${t}</b><small>${esc(sub||'')}</small></span><span class="pd">${dTxt(p)}</span></button>${starBtn(p)}</div>`};
  const favs=FAVS.filter(f=>!q||has(f.n)||has(f.p));
@@ -735,7 +734,7 @@ function meRow(){
   +(LOCST==='denied'&&!state.me?`<div class="note lochelp">${esc(locHelp())}</div>`:'');
 }
 function setFrom(p){
- state.from=p;$('#fromIn').value=fromName();$('#ftFrom').textContent=fromName();
+ state.from=p;$('#fromIn').value=fromVal();$('#ftFrom').textContent=fromName();
  if(state.to&&!(p&&pkey(p)===pkey(state.to))){FIELD='to';$('#snote').innerHTML='';state.sel=null;SEEN.clear();go('results',{fresh:true})}
  else{FIELD='to';$('#q').focus();renderPlaces()}
 }
@@ -743,7 +742,7 @@ function pickMe(){
  if(state.me){setFrom(null);return}
  if(LOCST==='denied'){renderPlaces();return}
  $('#fromIn').value='Otsin asukohta…';
- locate(true,ok=>{if(ok)setFrom(null);else{$('#fromIn').value=fromName();renderPlaces()}});
+ locate(true,ok=>{if(ok)setFrom(null);else{$('#fromIn').value=fromVal();renderPlaces()}});
 }
 function pick(p){
  if(!p)return;
@@ -755,6 +754,7 @@ function pick(p){
  go('results',{fresh:true});
  setTimeout(maybeInstall,8000);
 }
+const fromVal=()=>state.from||state.me?fromName():'';
 const fromLL=()=>state.from?state.from.ll:(state.me||DEF_LL);
 const fromName=()=>state.from?state.from.n:state.me?'Sinu asukoht':'Kesklinn (asukoht puudub)';
 
@@ -1117,7 +1117,7 @@ function go(v,o={}){
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
  if(v==='home'){renderHome();setSheet(snapFor('home'),o.instant)}
- if(v==='search'){setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromName();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
+ if(v==='search'){setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromVal();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
  if(v==='results'){setSheet(snapFor('results'),o.instant);
   if(o.fresh||!state.list.length){state.list=[];renderResults(true);if(map&&map.getSource('rt')){clearRoutes();clearTemp();LBL=[];keyVehicles();fitTo(bboxOf([fromLL(),state.to.ll]),15.6,o.instant)}
    setTimeout(()=>compute({fresh:true,first:true}),RM?0:60)}
@@ -1222,8 +1222,8 @@ $('#ftTo').parentNode.onclick=()=>go('search',{field:'to'});
 $('#fromIn').addEventListener('focus',()=>{if(FIELD!=='from'){FIELD='from';renderPlaces()}$('#fromIn').select()});
 $('#fromIn').addEventListener('input',()=>{FIELD='from';$('#snote').innerHTML='';renderPlaces()});
 $('#fromIn').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
-$('#fromIn').addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==$('#fromIn')&&!$('#fromIn').value.trim())$('#fromIn').value=fromName()},200));
-$('#q').addEventListener('focus',()=>{if(FIELD!=='to'){FIELD='to';if(!$('#fromIn').value.trim()||$('#fromIn').value!==fromName())$('#fromIn').value=fromName();renderPlaces()}});
+$('#fromIn').addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==$('#fromIn')&&!$('#fromIn').value.trim())$('#fromIn').value=fromVal()},200));
+$('#q').addEventListener('focus',()=>{if(FIELD!=='to'){FIELD='to';if(!$('#fromIn').value.trim()||$('#fromIn').value!==fromVal())$('#fromIn').value=fromVal();renderPlaces()}});
 $('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces()});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
 $('#fclr').onclick=e=>{e.preventDefault();$('#fromIn').value='';FIELD='from';renderPlaces();$('#fromIn').focus()};

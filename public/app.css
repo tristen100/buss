@@ -183,8 +183,7 @@ body[data-view=home] .view[data-v=home],body[data-view=search] .view[data-v=sear
 .sf .k{width:44px;color:var(--text-3);font-size:13px;font-weight:600}
 .sf input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:17px;font-weight:600;letter-spacing:-.01em}
 .sf input::placeholder{color:var(--text-3);font-weight:500}
-.sf .clr{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--text-3);margin-right:-6px;flex:none}
-.sf .clr[hidden]{display:none}
+.sf .clr{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--text-3)}
 .shead{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
 .shead .iconbtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--well)}
 .plist{display:grid;gap:2px}
