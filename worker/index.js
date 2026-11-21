@@ -1,5 +1,7 @@
-// buss.veebi.dev Worker: static files, plus /api/gps (Tallinn's vehicle positions have no CORS, so we pass them on).
+// buss.veebi.dev Worker: static files, plus /api/gps and /api/notices (Tallinn's vehicle positions and disruption
+// notices have no CORS, so we pass them on).
 let last = { at: 0, body: "" };
+let notes = { at: 0, body: "" };
 
 export default {
   async fetch(req, env) {
@@ -14,6 +16,16 @@ export default {
       }
       if (!last.body) return new Response("", { status: 502 });
       return new Response(last.body, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*" } });
+    }
+    if (url.pathname === "/api/notices") {
+      // Tallinn's disruption notices (transport.tallinn.ee/announcements.json, no CORS either)
+      if (Date.now() - notes.at > 300000) {
+        try {
+          const r = await fetch("https://transport.tallinn.ee/announcements.json", { cf: { cacheTtl: 300 } });
+          if (r.ok) notes = { at: Date.now(), body: await r.text() };
+        } catch (e) { /* keep the last copy */ }
+      }
+      return new Response(notes.body || "[]", { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=120", "access-control-allow-origin": "*" } });
     }
     const res = await env.ASSETS.fetch(req);
     if (url.pathname.startsWith("/data/")) {

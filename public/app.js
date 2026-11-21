@@ -1,11 +1,12 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
 import { Router, decodePoly, DETOUR } from './router.js?v=0fea4287';
-import { siri, delaysFor, vehicles } from './live.js?v=9374c404';
+import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
 const S='fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const I={
  refresh:`<svg viewBox="0 0 24 24" ${S}><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
+ warn:`<svg viewBox="0 0 24 24" ${S}><path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg>`,
  search:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>`,
  back:`<svg viewBox="0 0 24 24" width="22" height="22" ${S}><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>`,
  swap:`<svg viewBox="0 0 24 24" width="20" height="20" ${S}><path d="M8 19V5M4.5 8.5 8 5l3.5 3.5M16 5v14m3.5-3.5L16 19l-3.5-3.5"/></svg>`,
@@ -78,6 +79,11 @@ const fmtM=d=>d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d/10
 let TT=null,RT=null,SHAPES=null,DELAYS=new Map(),DELAYS_AT=0;
 const DEF_LL=[24.7445,59.4330]; // Vabaduse väljak, used until we know where you are
 const API='https://veebi.dev/api/buss/';
+let NOTES=[];
+async function loadNotes(){try{NOTES=await notices(clock().ymd);if(state.view==='results')renderResults();else if(state.view==='route')renderRoute();else if(state.view==='home'&&NEAR.length)loadNear()}catch(e){}setTimeout(loadNotes,600000)}
+const notesFor=(m,n)=>NOTES.filter(x=>x.routes.has(String(n))&&(!x.modes.size||x.modes.has(m)));
+const legNotes=R=>{const seen=new Set(),o=[];for(const l of R.legs)if(l.n&&(l.m==='bus'||l.m==='tram'||l.m==='trol'))for(const x of notesFor(l.m,l.n))if(!seen.has(x.key)){seen.add(x.key);o.push([l,x])}return o};
+function noteBox(x){return`<details class="ntc"><summary>${I.warn}<span>${esc(x.title)}</span></summary>${x.paras.map(t=>`<p>${esc(t)}</p>`).join('')}${x.links.map(k=>`<a href="${esc(k.href)}" target="_blank" rel="noopener">${esc(k.t)}</a>`).join(' · ')}</details>`}
 async function loadData(){
  const r=await fetch('data/tt.json');if(!r.ok)throw new Error('tt');TT=await r.json();RT=new Router(TT);
  fetch('data/shapes.json').then(r=>r.json()).then(s=>{SHAPES=s;SHQ.clear();if(state.view==='results'||state.view==='route')go(state.view,{instant:true,keepCam:true})}).catch(()=>{});
@@ -543,12 +549,13 @@ const badge=R=>R.badge?`<span class="badge ${R.badge[0]} ${R.run?eff(R):''}">${R
 function routeCard(R,on){
  const lv=R.legs.filter(l=>l.live).slice(0,R.plan?1:2).map(l=>liveTxt(l)).join('');
  const runNote=R.runNote?`<span>${I[eff(R)].replace('<svg',`<svg style="color:var(--${eff(R)})"`)}${R.runNote}</span>`:'';
+ const nt=legNotes(R).slice(0,1).map(([l])=>`<span class="ntl">${I.warn}${MODE[l.m]} ${esc(l.n)}: liiklusteade</span>`).join('');
  return`<div class="route ${on?'on':''}" role="button" tabindex="0" data-id="${R.id}" aria-label="Lahkud ${hm(R.dep)}, kohal ${hm(R.arr)}, ${dur(R)} minutit">
   ${R.badge?`<div class="rb">${badge(R)}</div>`:''}
   <div class="rt">${span(R)}<span class="dur">${dur(R)} min</span></div>
   <div class="legs">${chips(R)}</div>
   ${strip(R)}
-  <div class="rlive">${runNote}${lv}</div></div>`;
+  <div class="rlive">${runNote}${lv}${nt}</div></div>`;
 }
 const curList=()=>state.list.map(R=>R.id);
 function renderResults(loading){
@@ -602,7 +609,7 @@ function renderRoute(){
   else{
    const xf=R.legs.slice(0,i).some(x=>x.from);
    s+=`<li class="stp stop"><time>${hm(l.a)}</time><span class="nd"></span><div class="tx"><b>${esc(l.from)}</b>${xf?'<small>ümberistumine</small>':''}</div></li>`;
-   s+=`<li class="stp leg" style="--c:${col(l.m)}"><time></time><span class="nd"></span><div class="tx"><div class="ln"><span class="lg ${l.m}">${I[l.m]}${esc(l.n)}</span>${MODE[l.m]} ${esc(l.n)} → ${esc(l.dir)}</div>${stepLive(l)}<small>${l.stops} ${l.stops===1?'peatus':'peatust'} · ${Math.round(l.b-l.a)} min · välju: ${esc(l.at)}</small></div></li>`;
+   s+=`<li class="stp leg" style="--c:${col(l.m)}"><time></time><span class="nd"></span><div class="tx"><div class="ln"><span class="lg ${l.m}">${I[l.m]}${esc(l.n)}</span>${MODE[l.m]} ${esc(l.n)} → ${esc(l.dir)}</div>${stepLive(l)}${(l.m==='bus'||l.m==='tram'||l.m==='trol')?notesFor(l.m,l.n).map(noteBox).join(''):''}<small>${l.stops} ${l.stops===1?'peatus':'peatust'} · ${Math.round(l.b-l.a)} min · välju: ${esc(l.at)}</small></div></li>`;
    s+=`<li class="stp stop"><time>${hm(l.b)}</time><span class="nd"></span><div class="tx"><b>${esc(l.at)}</b></div></li>`;
   }
  });
@@ -634,7 +641,7 @@ async function loadNear(force){
  NEAR=rows.filter(r=>r.exp>=now-20).sort((a,b)=>a.exp-b.exp).filter(r=>{const k=r.mode+r.route+r.head;if(seen.has(k))return false;seen.add(k);return true}).slice(0,5);
  $('#liveClock').textContent=hm(now/60);
  $('#near').innerHTML=NEAR.length?NEAR.map((d,i)=>{const dl=Math.round((d.exp-d.sched)/60),stt=d.plan?'<span class="st-ok">sõiduplaani järgi</span>':dl>=1?`<span class="st-late">hilineb ${dl} min</span>`:dl<=-1?`<span class="st-early">${-dl} min varem</span>`:'<span class="st-ok">graafikus</span>',mn=Math.max(0,Math.round((d.exp-now)/60));
-  return`<button class="dep" data-i="${i}"><span class="lg ${d.mode}">${I[d.mode]||I.bus}${esc(d.route)}</span><span class="to">${esc(d.head)}<small>${MODE[d.mode]||'Buss'} · ${esc(stopName(d.stop))}</small></span><span class="when">${mn?mn+' min':'kohe'}<small>${stt}</small></span></button>`}).join(''):'<div class="note">Lähima tunni jooksul väljumisi pole.</div>';
+  return`<button class="dep" data-i="${i}"><span class="lg ${d.mode}">${I[d.mode]||I.bus}${esc(d.route)}</span><span class="to">${esc(d.head)}<small>${notesFor(d.mode,d.route).length?`<span class="ntm">${I.warn}teade</span> · `:''}${MODE[d.mode]||'Buss'} · ${esc(stopName(d.stop))}</small></span><span class="when">${mn?mn+' min':'kohe'}<small>${stt}</small></span></button>`}).join(''):'<div class="note">Lähima tunni jooksul väljumisi pole.</div>';
  $$('#near .dep').forEach(b=>b.onclick=()=>{const d=NEAR[+b.dataset.i],sl=stopLL(d.stop);
   let v=null,bd=1e9;for(const x of VEHS){if(x.route!==d.route||x.mode!==d.mode)continue;const dd=m(x.ll,sl);if(dd<bd){bd=dd;v=x}}
   if(!map)return;const ll=v?(v.cur||v.ll):sl;map.easeTo({center:ll,zoom:15.6,padding:pad(),duration:RM?0:800});if(v)setTimeout(()=>vehPopup(v),RM?0:820)});
@@ -1288,7 +1295,7 @@ $('#appInst').hidden=standalone();
 /* ================= start ================= */
 state.run=LS.get('buss-run')==='1';
 renderHome();setSheet(snapFor('home'),true);lens();syncRun();
-loadData().then(()=>{renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
+loadData().then(()=>{loadNotes();renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
 /* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */

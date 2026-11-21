@@ -57,3 +57,28 @@ export async function vehicles(base = "") {
   }
   return out;
 }
+
+/* Tallinn's disruption notices in force today: [{key, modes:Set, routes:Set, title, paras:[text], links:[{t,href}]}].
+   The text comes as HTML; it is read with DOMParser and only its text and http(s) links are kept. */
+const dmy = t => { const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(t || ""); return m ? +m[3] * 1e4 + +m[2] * 100 + +m[1] : null; };
+const NMODE = t => { t = (t || "").toLowerCase(); return t.startsWith("tramm") ? "tram" : t.startsWith("troll") ? "trol" : t.startsWith("buss") || t.startsWith("bus") ? "bus" : null; };
+export async function notices(ymd, base = "") {
+  const r = await fetch(base + "/api/notices");
+  if (!r.ok) throw new Error("notices " + r.status);
+  const out = [];
+  for (const n of await r.json()) {
+    const a = dmy(n.valid_start_time) ?? dmy(n.publication_start_time), b = dmy(n.valid_end_time) ?? dmy(n.publication_end_time);
+    if ((a && a > ymd) || (b && b < ymd)) continue;
+    const routes = new Set(String(n.routes || "").split(/[,;\s]+/).map(x => x.trim().replace(/^T(?=\d)/, "")).filter(Boolean));
+    if (!routes.size) continue;
+    const modes = new Set(String(n.transport || "").split(/[,;\/]+/).map(NMODE).filter(Boolean));
+    const doc = new DOMParser().parseFromString(String(n.info || ""), "text/html");
+    const paras = [...doc.body.querySelectorAll("p,li")].map(p => p.textContent.replace(/\s+/g, " ").trim()).filter(t => t && !/^lisainfo|^vabandame/i.test(t));
+    if (!paras.length && doc.body.textContent.trim()) paras.push(doc.body.textContent.replace(/\s+/g, " ").trim());
+    const lt = new Set([...doc.querySelectorAll("a[href]")].map(x => x.textContent.replace(/\s+/g, " ").trim()));
+    for (let i = paras.length - 1; i >= 0; i--) if (lt.has(paras[i]) || [...lt].some(t => t && paras[i].replace(t, "").replace(/[\s.:!-]/g, "").length < 3 && paras[i].includes(t))) paras.splice(i, 1);
+    const links = [...doc.querySelectorAll("a[href]")].map(x => ({ t: x.textContent.trim() || "vaata", href: x.getAttribute("href") })).filter(x => /^https:\/\//.test(x.href) && !/^https:\/\/transport\.tallinn\.ee\/?$/.test(x.href));
+    out.push({ key: (n.title || "") + a, modes, routes, title: String(n.title || "Liiklusteade").replace(/\s+/g, " ").trim(), paras, links });
+  }
+  return out;
+}

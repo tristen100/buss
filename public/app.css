@@ -621,3 +621,15 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 }
 @keyframes refspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.refbtn.spin svg{animation:none}}
+
+/* disruption notices (transport.tallinn.ee) */
+[data-theme=light]{--warn:#B45309} [data-theme=dark]{--warn:#F5B14C}
+.ntl,.ntm{color:var(--warn);font-weight:600}
+.ntl svg,.ntm svg{width:14px;height:14px;vertical-align:-2px;margin-right:4px}
+.ntm{white-space:nowrap}
+.ntc{margin:8px 0 6px;border-radius:14px;background:color-mix(in srgb,var(--warn) 12%,transparent);padding:10px 12px;font-size:.88rem;line-height:1.4}
+.ntc summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:flex-start;color:var(--warn);font-weight:600}
+.ntc summary::-webkit-details-marker{display:none}
+.ntc summary svg{width:16px;height:16px;flex:none;margin-top:2px}
+.ntc p{margin:8px 0 0;color:var(--text-2)}
+.ntc a{display:inline-block;margin-top:8px;color:var(--warn);font-weight:600}
