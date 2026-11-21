@@ -19,11 +19,16 @@ export class Router {
     this.byStop = Array.from({ length: n }, () => []);
     // nb / na: stops of a pattern where you may not get on / off (long-distance lines in Tallinn)
     tt.pats.forEach(p => { p.nbS = p.nb && new Set(p.nb); p.naS = p.na && new Set(p.na); });
+    // county buses (mode reg). q.noReg: no county bus ride from one Tallinn stop to another (people in town rarely
+    // take them); rides that start or end outside Tallinn stay. Set after the grid below.
+    tt.pats.forEach(p => { p.reg = tt.routes[p.r][1] === "reg"; });
     tt.pats.forEach((p, pi) => p.s.forEach((s, i) => { if (i < p.s.length - 1) this.byStop[s].push([pi, i]); }));
     // stops near each other (grid of ~500 m cells)
     const cell = s => [Math.floor(this.ll[s][0] * KX / 500), Math.floor(this.ll[s][1] * KY / 500)];
     this.grid = new Map();
     for (let s = 0; s < n; s++) { const k = cell(s).join(","); (this.grid.get(k) || this.grid.set(k, []).get(k)).push(s); }
+    // "in town" = a Tallinn city stop (it has a SIRI id) or a county-only stop within 300 m of one
+    this.town = Array.from({ length: n }, (_, s) => S.siri[s] ? 1 : this.near(this.ll[s], 300).some(([o]) => S.siri[o]) ? 1 : 0);
     this.foot = Array.from({ length: n }, (_, s) => this.near(this.ll[s], XFER).filter(([o]) => o !== s));
     this.days = new Map();
     this.siriIx = new Map(); S.siri.forEach((id, i) => { if (id) this.siriIx.set(id, i); });
@@ -66,12 +71,13 @@ export class Router {
   }
 
   /* One search. q = {from:[lon,lat], to:[lon,lat], t (minutes), ymd, walk (km/h), fast (km/h or 0), maxFast (m),
-     delays: Map(tripKey -> minutes late), rounds} -> journeys, one per number of rides that is faster than fewer rides */
+     delays: Map(tripKey -> minutes late), rounds, noReg} -> journeys, one per number of rides that is faster than fewer rides */
   search(q) {
     const trips = this.day(q.ymd), pats = this.tt.pats, n = this.n;
     const vw = q.walk / 3.6 * 60, vf = q.fast ? q.fast / 3.6 * 60 : 0;           // metres per minute
     const legT = (m, eg) => { const p = m * DETOUR; return vf && !eg && p <= q.maxFast ? p / vf : p / vw; };
     const delays = q.delays || new Map(), rounds = q.rounds || ROUNDS;
+    const town = this.town, noReg = !!q.noReg;
     const dly = tr => delays.get(tr.key) || 0;
     const best = new Float64Array(n).fill(Infinity);
     const tau = [], par = [];
@@ -95,7 +101,7 @@ export class Router {
         let tr = null, bi = -1;
         for (let i = i0; i < S.length; i++) {
           const s = S[i];
-          if (tr && !p.naS?.has(i)) {
+          if (tr && !p.naS?.has(i) && !(noReg && p.reg && town[S[bi]] && town[s])) {
             const arr = tr.t0 + tr.pr[i] + dly(tr);
             if (arr < Math.min(best[s], tgt)) { cur[s] = arr; best[s] = arr; P[s] = { k: "ride", pi, tr, i0: bi, i1: i }; newly.add(s); }
           }

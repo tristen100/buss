@@ -4,5 +4,7 @@
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
   "routes": [{ "pattern": "buss.veebi.dev", "custom_domain": true }],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "buss", "database_id": "4eda68a9-3edc-486e-99a3-10c3f37f3a6c" }],
+  "triggers": { "crons": ["* * * * *"] }
 }

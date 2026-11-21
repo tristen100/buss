@@ -1,5 +1,5 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR } from './router.js?v=0fea4287';
+import { Router, decodePoly, DETOUR } from './router.js?v=764878f0';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
@@ -156,6 +156,7 @@ function runCard(R,best){
 const state={view:'home',run:false,sel:null,when:{k:'now',day:0,t:17*60+30},theme:document.documentElement.dataset.theme,V:330,back:'home',
  themePref:['light','dark'].includes(LS.get('buss-theme'))?LS.get('buss-theme'):'auto',
  glass:!document.documentElement.classList.contains('noglass'),
+ regTown:LS.get('buss-reg')==='1', // county buses between two Tallinn stops: off unless turned on
  pace:(()=>{const d={walk:5.5,jog:9,run:12,max:750};try{const x=JSON.parse(LS.get('buss-pace'));if(x&&x.jog&&x.run)return{...d,...x}}catch(e){}return d})(),
  me:null,from:null,to:null,list:[],best:null,walk:null,busy:false};
 /* favourites and recent places live on the device: {n name, ic icon, p place name, a address, ll [lon,lat]} */
@@ -650,7 +651,7 @@ async function loadNear(force){
 }
 function planNear(ns,ymd,nowS){
  const day=RT.day(ymd),out=[],R=TT.routes;
- for(const [s,d] of ns)for(const [pi,i] of RT.byStop[s]){const p=TT.pats[pi],r=R[p.r];if(r[1]!=='reg'&&r[1]!=='train'||p.nbS?.has(i))continue;
+ for(const [s,d] of ns)for(const [pi,i] of RT.byStop[s]){const p=TT.pats[pi],r=R[p.r];if(r[1]!=='reg'&&r[1]!=='train'||p.nbS?.has(i)||r[1]==='reg'&&!state.regTown&&RT.town[s])continue;
   for(const tr of day[pi]){const t=(tr.t0+tr.pr[i])*60;if(t<nowS-20)continue;if(t>nowS+3600)break;out.push({mode:r[1],route:r[0],exp:t,sched:t,head:p.h,stop:s,d,plan:1});break}}
  return out;
 }
@@ -804,7 +805,7 @@ function closeSettings(){go(state.back&&state.back!=='settings'?state.back:'home
 $('#openSet').onclick=()=>state.view==='settings'?closeSettings():openSettings();
 $('#setBack').onclick=closeSettings;
 addEventListener('keydown',e=>{if(e.key==='Escape'&&state.view==='settings'&&!e.defaultPrevented){if(!$('#favAddBox').hidden){openFavAdd(false);$('#favAdd').focus();return}closeSettings()}});
-function renderSettings(){openFavAdd(false,true);renderFavs();renderPace();syncSeg();$('#glassTog').setAttribute('aria-checked',state.glass)}
+function renderSettings(){openFavAdd(false,true);renderFavs();renderPace();syncSeg();$('#glassTog').setAttribute('aria-checked',state.glass);$('#regTog').setAttribute('aria-checked',state.regTown)}
 
 /* favourites: tap a row to rename or change its icon, drag the handle to reorder, delete with undo */
 const ICN={home:'Kodu',work:'Töö',school:'Kool',gym:'Trenn',shop:'Pood',fam:'Pere',star:'Täht',pin:'Koht'};
@@ -909,6 +910,8 @@ $$('.pace .step button').forEach(b=>b.onclick=()=>{const k=b.closest('.pace').da
 /* liquid glass on or off */
 function setGlass(on){state.glass=on;document.documentElement.classList.toggle('noglass',!on);LS.set('buss-glass',on?'1':'0');$('#glassTog').setAttribute('aria-checked',on);if(on)lens(true)}
 $('#glassTog').onclick=()=>setGlass(!state.glass);
+/* county buses inside Tallinn on or off (off by default) */
+$('#regTog').onclick=()=>{state.regTown=!state.regTown;LS.set('buss-reg',state.regTown?'1':'0');$('#regTog').setAttribute('aria-checked',state.regTown);if(state.to)compute()};
 
 /* ================= liquid glass refraction (Chromium) ================= */
 const LENS=/Chrome\/\d+/.test(navigator.userAgent)&&!/CriOS|FxiOS|EdgiOS|Mobile Safari\/(?!537)/.test(navigator.userAgent)&&!matchMedia('(prefers-reduced-transparency: reduce)').matches;
@@ -971,7 +974,7 @@ async function compute(o={}){
  const my=++CMP,W=state.when,c=clock(),live=whenLive();
  if(Date.now()-DELAYS_AT>45000){DELAYS=new Map();DELAYS_AT=Date.now()}
  const ymd=W.k==='now'?c.ymd:addDays(c.ymd,W.day),t=W.k==='now'?c.min:W.t;
- const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,fast:0,delays:live?DELAYS:new Map()};
+ const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
  const fast=state.run&&W.k==='now';
  const run=()=>W.k==='arr'?RT.arriveBy(q):W.k==='last'?RT.lastOne(q):W.k==='first'?RT.firstOne(q):fast?RT.fastPlan(q):RT.plan(q);
  let r=run();
@@ -1011,8 +1014,9 @@ async function compute(o={}){
 }
 /* ===== "Mine 5 min pärast": a reminder for one chosen trip =====
    Follows the first ride's live delay (SIRI at its stop, every minute) and tells you 5 minutes before you have to
-   leave: a system notification when allowed, plus a sound-free in-app banner and a buzz. It runs while the app is
-   open (also in the background on Android and computers); there is no server push. */
+   leave: a system notification when allowed, plus a sound-free in-app banner and a buzz. With notifications allowed
+   the reminder is also sent to the server (worker/push.js), which follows the same delay and sends a Web Push, so it
+   comes with the phone locked and the app closed (iPhone: only the app on the home screen, iOS 16.4+). */
 const LEAD=5;
 let ALARM=(()=>{try{return JSON.parse(LS.get('buss-alarm')||'null')}catch(e){return null}})(),alarmT=0;
 const alarmNow=()=>{const c=clock();return ALARM&&c.ymd>ALARM.ymd?c.min+1440:c.min};
@@ -1025,14 +1029,30 @@ function alarmable(R){
 }
 function setAlarm(R){
  const f=R.j.legs.find(l=>l.m==='ride'),p=TT.pats[f.pi],r=TT.routes[p.r];
+ unpush();
  ALARM={ymd:clock().ymd,sig:R.sig,key:f.key,stop:f.fromStop,sched:f.sched,delay:f.delay||0,lead:f.a-R.dep,m:r[1],n:r[0],to:state.to.n,fired:0};
  saveAlarm();
  const ask=window.Notification&&Notification.permission==='default'?Notification.requestPermission():Promise.resolve();
- ask.catch(()=>{}).then(()=>{const left=alarmLeave()-LEAD-alarmNow();
-  toast(left>0?`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut. Hoia äpp lahti.`:'Mine kohe!');
+ ask.catch(()=>{}).then(()=>Promise.race([pushAlarm(),new Promise(r=>setTimeout(()=>r(false),8000))])).then(ok=>{const left=alarmLeave()-LEAD-alarmNow();
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)&&!standalone();
+  toast(left<=0?'Mine kohe!':`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut.`+(ok?'':ios?' Lukus telefonile teavituse saamiseks lisa äpp avaekraanile. Praegu hoia äpp lahti.':' Hoia äpp lahti.'));
   tickAlarm();if(state.view==='route')renderRoute()});
 }
-function clearAlarm(){ALARM=null;saveAlarm();clearTimeout(alarmT);$('#alarmBar')?.remove();if(state.view==='route')renderRoute()}
+// the server copy of the reminder (Web Push): needs notifications allowed and a push service
+async function pushAlarm(){
+ try{
+  if(!ALARM||!('PushManager' in window)||!navigator.serviceWorker||!window.Notification||Notification.permission!=='granted')return false;
+  const a=ALARM,reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub){const {key}=await (await fetch('/api/push/key')).json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key})}
+  const res=await fetch('/api/push/alarm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub:sub.toJSON(),ymd:a.ymd,siri:TT.stops.siri[a.stop]||0,mode:a.m,route:a.n,sched:a.sched,lead:a.lead,delay:a.delay,stop:stopName(a.stop),dest:a.to})});
+  if(!res.ok)return false;
+  const {id}=await res.json();if(ALARM!==a){fetch('/api/push/alarm?id='+id,{method:'DELETE'}).catch(()=>{});return false}
+  a.pid=id;saveAlarm();return true;
+ }catch(e){return false}
+}
+function unpush(){if(ALARM&&ALARM.pid)fetch('/api/push/alarm?id='+ALARM.pid,{method:'DELETE',keepalive:true}).catch(()=>{})}
+function clearAlarm(){unpush();ALARM=null;saveAlarm();clearTimeout(alarmT);$('#alarmBar')?.remove();if(state.view==='route')renderRoute()}
 async function tickAlarm(){
  clearTimeout(alarmT);if(!ALARM)return;
  if(alarmNow()>alarmLeave()+2){clearAlarm();return}
@@ -1047,7 +1067,7 @@ async function tickAlarm(){
 function fireAlarm(min){
  const title=min>=1?`Mine ${min} min pärast`:'Mine kohe',body=`${MODE[ALARM.m]} ${ALARM.n} väljub ${hm(ALARM.sched+ALARM.delay)} peatusest ${stopName(ALARM.stop)} · ${ALARM.to}`;
  try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
- if(window.Notification&&Notification.permission==='granted'){
+ if(window.Notification&&Notification.permission==='granted'&&!ALARM.pid){ // with pid the server's push brings it
   const o={body,tag:'buss-leave',icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',renotify:true,vibrate:[200,100,200]};
   (navigator.serviceWorker?navigator.serviceWorker.getRegistration():Promise.resolve(null)).then(r=>r?r.showNotification(title,o):new Notification(title,o)).catch(()=>{try{new Notification(title,o)}catch(e){}});
  }
