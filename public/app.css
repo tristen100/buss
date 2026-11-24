@@ -231,6 +231,11 @@ body[data-view=home] .view[data-v=home],body[data-view=search] .view[data-v=sear
 .badge.out{box-shadow:inset 0 0 0 1.25px var(--line);color:var(--text-2)}
 .badge.gain{background:var(--run);color:#fff}
 .badge.gain.jog{background:var(--jog)}
+.badge.tight{background:var(--early);color:#fff}
+.rlive .tnote{white-space:normal;color:var(--early);font-weight:600;flex-basis:100%;align-items:flex-start}
+.rlive .tnote svg{flex:none;margin-top:2px}
+.tightbox{display:flex;gap:10px;align-items:flex-start;margin:12px 0 4px;padding:12px 14px;border-radius:16px;background:color-mix(in srgb,var(--early) 12%,transparent);color:var(--text);font-size:14px;line-height:1.4;font-weight:500}
+.tightbox svg{flex:none;width:18px;height:18px;color:var(--early);margin-top:1px}
 .strip{position:relative;height:12px;margin:12px 0 9px}
 .strip .seg{position:absolute;top:2px;height:8px;border-radius:4px;background:var(--c,var(--walk))}
 .strip .seg.walk{top:4px;height:4px;background:radial-gradient(circle,var(--walk) 1.6px,transparent 2px) 0 50%/6px 4px repeat-x}

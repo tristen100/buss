@@ -3,9 +3,9 @@
 // Plain ES module with no DOM, so the comparison tests run it in Node too.
 
 export const KX = 111320 * Math.cos(59.43 * Math.PI / 180), KY = 110574;
-export const DETOUR = 1.37;           // straight line to walking path (mean of 80 real street walks to stops from peatus.ee, 21.11.2026)
+export const DETOUR = 1.25;           // straight line to walking path (Tristen's choice; real street walks are used where known)
 export const BOARD = 1;               // minutes spare at a stop (default; q.board when walking, q.boardFast when jogging/running)
-const ACCESS = 2000, XFER = 600;      // straight-line metres: to/from a stop, between stops (wider finds 1+ min faster trips for ~9%)
+export const ACCESS = 2000, XFER = 600;      // straight-line metres: to/from a stop, between stops (wider finds 1+ min faster trips for ~9%)
 const ROUNDS = 5;
 
 export const dist = (a, b) => Math.hypot((b[0] - a[0]) * KX, (b[1] - a[1]) * KY);
@@ -32,6 +32,18 @@ export class Router {
     this.foot = Array.from({ length: n }, (_, s) => this.near(this.ll[s], XFER).filter(([o]) => o !== s));
     this.days = new Map();
     this.siriIx = new Map(); S.siri.forEach((id, i) => { if (id) this.siriIx.set(id, i); });
+  }
+
+  /* Real stop-to-stop walks from walk.js data (stops.json): replaces the straight-line guess where both stops are on the
+     mapped street network. Distances are kept as straight-line-equivalent metres (real / DETOUR), like everywhere else. */
+  setWalk(w) {
+    if (!w || w.tt !== this.tt.v) return false;        // built for another timetable: stop numbers would not match
+    for (let s = 0; s < this.n; s++) {
+      const f = w.foot[s]; if (!f) continue;
+      const real = new Map(); for (let i = 0; i < f.length; i += 2) real.set(f[i], f[i + 1] / DETOUR);
+      this.foot[s] = this.near(this.ll[s], XFER).filter(([o]) => o !== s && (!w.snap[o] || real.has(o))).map(([o, d]) => [o, w.snap[o] ? real.get(o) : d]);
+    }
+    return true;
   }
 
   // stops within r metres (straight line): [[stop, metres]]
@@ -76,15 +88,16 @@ export class Router {
     const trips = this.day(q.ymd), pats = this.tt.pats, n = this.n;
     const vw = q.walk / 3.6 * 60, vf = q.fast ? q.fast / 3.6 * 60 : 0;           // metres per minute
     const legT = (m, eg) => { const p = m * DETOUR; return vf && !eg && p <= q.maxFast ? p / vf : p / vw; };
-    const delays = q.delays || new Map(), rounds = q.rounds || ROUNDS, bw = q.board ?? BOARD;
+    const delays = q.delays || new Map(), rounds = q.rounds || ROUNDS, bw = q.board ?? BOARD, bw1 = q.boardFirst ?? bw; // bw1: the first boarding only
     const town = this.town, noReg = !!q.noReg;
     const dly = tr => delays.get(tr.key) || 0;
     const best = new Float64Array(n).fill(Infinity);
     const tau = [], par = [];
-    const acc = this.near(q.from, ACCESS), egr = this.near(q.to, ACCESS);
+    const acc = q.acc || this.near(q.from, ACCESS), egr = q.egr || this.near(q.to, ACCESS); // q.acc/q.egr: real walks (walk.js), as straight-line-equivalent m
     const egMap = new Map(egr.map(([s, d]) => [s, d]));
     const direct = dist(q.from, q.to);
-    let tgt = q.noWalk ? Infinity : direct * DETOUR / vw + q.t; // walking the whole way is always an option
+    const directM = q.directM ?? direct * DETOUR;
+    let tgt = q.noWalk ? Infinity : directM / vw + q.t; // walking the whole way is always an option
     let marked = new Set();
     tau[0] = new Float64Array(n).fill(Infinity); par[0] = new Array(n);
     for (const [s, d] of acc) { const t = q.t + legT(d); tau[0][s] = t; best[s] = t; par[0][s] = { k: "acc", d }; marked.add(s); }
@@ -105,7 +118,7 @@ export class Router {
             const arr = tr.t0 + tr.pr[i] + dly(tr);
             if (arr < Math.min(best[s], tgt)) { cur[s] = arr; best[s] = arr; P[s] = { k: "ride", pi, tr, i0: bi, i1: i }; newly.add(s); }
           }
-          const ready = prev[s] + bw;
+          const ready = prev[s] + (k === 1 ? bw1 : bw);
           if (ready === Infinity || i === S.length - 1 || p.nbS?.has(i)) continue;
           if (!tr || ready <= tr.t0 + tr.pr[i] + dly(tr)) {
             const c = this.catch(list, i, ready, dly);
@@ -126,7 +139,7 @@ export class Router {
       if (bs >= 0 && bt < tgt) { tgt = bt; results.push(this.trace(k, bs, egMap.get(bs), q, tau, par, legT)); }
       if (!marked.size) break;
     }
-    return { journeys: results, walk: { m: direct * DETOUR, min: direct * DETOUR / vw } };
+    return { journeys: results, walk: { m: directM, min: directM / vw } };
   }
 
   // earliest trip of a pattern leaving stop index i at or after `ready` (delays can reorder trips)
@@ -163,7 +176,7 @@ export class Router {
     if (!first) return null;
     const lt = l => legT(l.d / DETOUR, l.eg);
     const i0 = legs.indexOf(first);
-    let t = first.a - (q.board ?? BOARD);
+    let t = first.a - (q.boardFirst ?? q.board ?? BOARD);
     for (let i = i0 - 1; i >= 0; i--) { legs[i].b = t; legs[i].a = t - lt(legs[i]); t = legs[i].a; }
     for (let i = i0 + 1; i < legs.length; i++) if (legs[i].m === "walk") { legs[i].a = legs[i - 1].b; legs[i].b = legs[i].a + lt(legs[i]); }
     return { legs, dep: legs[0].a, arr: legs[legs.length - 1].b, rides: legs.filter(l => l.m === "ride").length };

@@ -1,5 +1,6 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR } from './router.js?v=46f41170';
+import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=53291b17';
+import { walker } from './walk.js?v=74ccd5aa';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
@@ -77,6 +78,7 @@ function addDays(ymd,k){const d=new Date(Date.UTC(Math.floor(ymd/1e4),Math.floor
 const hm=t=>{t=Math.round(t);t=((t%1440)+1440)%1440;return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')};
 const mins=x=>Math.max(0,Math.round(x));
 const fmtM=d=>d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d/10)*10+' m';
+const WALK=walker(); // real street walks (OpenStreetMap), loaded around the start and the end when needed
 let TT=null,RT=null,SHAPES=null,DELAYS=new Map(),DELAYS_AT=0;
 const DEF_LL=[24.7445,59.4330]; // Vabaduse väljak, used until we know where you are
 const API='https://veebi.dev/api/buss/';
@@ -86,7 +88,7 @@ const notesFor=(m,n)=>NOTES.filter(x=>x.routes.has(String(n))&&(!x.modes.size||x
 const legNotes=R=>{const seen=new Set(),o=[];for(const l of R.legs)if(l.n&&(l.m==='bus'||l.m==='tram'||l.m==='trol'))for(const x of notesFor(l.m,l.n))if(!seen.has(x.key)){seen.add(x.key);o.push([l,x])}return o};
 function noteBox(x){return`<details class="ntc"><summary>${I.warn}<span>${esc(x.title)}</span></summary>${x.paras.map(t=>`<p>${esc(t)}</p>`).join('')}${x.links.map(k=>`<a href="${esc(k.href)}" target="_blank" rel="noopener">${esc(k.t)}</a>`).join(' · ')}</details>`}
 async function loadData(){
- const r=await fetch('data/tt.json');if(!r.ok)throw new Error('tt');TT=await r.json();RT=new Router(TT);
+ const r=await fetch('data/tt.json');if(!r.ok)throw new Error('tt');TT=await r.json();RT=new Router(TT);WALK.ready.then(()=>RT.setWalk(WALK.stops));
  fetch('data/shapes.json').then(r=>r.json()).then(s=>{SHAPES=s;SHQ.clear();if(state.view==='results'||state.view==='route')go(state.view,{instant:true,keepCam:true})}).catch(()=>{});
 }
 const SHQ=new Map();
@@ -546,18 +548,20 @@ function strip(R){
 }
 const span=R=>`<span class="arr"><span class="t0">${hm(R.dep)}</span><span class="dash">-</span>${hm(R.arr)}</span>`;
 const eff=R=>R.run==='jog'?'jog':'run';
+const tightTxt=R=>'Buss jõuab veidi varem kui arvestatud. '+(R.tight<1?'Hakka kohe liikuma.':`Hakka liikuma ${R.tight} minuti jooksul.`);
 const dur=R=>Math.round(R.arr-R.dep);
 const badge=R=>R.badge?`<span class="badge ${R.badge[0]} ${R.run?eff(R):''}">${R.badge[0]==='gain'?I[eff(R)].replace('<svg','<svg width="13" height="13"'):''}${R.badge[1]}</span>`:'';
 function routeCard(R,on){
  const lv=R.legs.filter(l=>l.live).slice(0,R.plan?1:2).map(l=>liveTxt(l)).join('');
  const runNote=R.runNote?`<span>${I[eff(R)].replace('<svg',`<svg style="color:var(--${eff(R)})"`)}${R.runNote}</span>`:'';
+ const tn=R.tight!=null?`<span class="tnote">${I.warn}${tightTxt(R)}</span>`:'';
  const nt=legNotes(R).slice(0,1).map(([l])=>`<span class="ntl">${I.warn}${MODE[l.m]} ${esc(l.n)}: liiklusteade</span>`).join('');
  return`<div class="route ${on?'on':''}" role="button" tabindex="0" data-id="${R.id}" aria-label="Lahkud ${hm(R.dep)}, kohal ${hm(R.arr)}, ${dur(R)} minutit">
   ${R.badge?`<div class="rb">${badge(R)}</div>`:''}
   <div class="rt">${span(R)}<span class="dur">${dur(R)} min</span></div>
   <div class="legs">${chips(R)}</div>
   ${strip(R)}
-  <div class="rlive">${runNote}${lv}${nt}</div></div>`;
+  <div class="rlive">${tn}${runNote}${lv}${nt}</div></div>`;
 }
 const curList=()=>state.list.map(R=>R.id);
 function renderResults(loading){
@@ -601,6 +605,7 @@ function stepLive(l){
 function renderRoute(){
  const R=ROUTES[state.sel];if(!R){go('results');return}
  let s=`<div class="dsum">${span(R)}</div><div class="dmeta"><span class="dur">${dur(R)} min</span>${badge(R)}</div>${ALARM&&ALARM.sig===R.sig?`<button class="alarmbtn on" id="alarmBtn">${I.bell}Teavitan ${hm(alarmLeave()-LEAD)} · tühista</button>`:alarmable(R)?`<button class="alarmbtn" id="alarmBtn">${I.bell}Teavita 5 min enne minekut</button>`:''}<div class="legs">${chips(R)}</div>`;
+ if(R.tight!=null)s+=`<div class="tightbox">${I.warn}<span>${tightTxt(R)}</span></div>`;
  if(R.runcard)s+=`<div class="runcard ${eff(R)}"><span class="ri">${I[eff(R)]}</span><span class="big">${R.runcard.big}</span><span class="rs">${R.runcard.rs}</span><div class="rf">${R.runcard.rf}</div></div>`;
  const c=clock();
  s+='<ol class="steps">';
@@ -994,6 +999,17 @@ function lens(force){
 /* ================= planning: timetable + live delays ================= */
 const nowLo=()=>Math.ceil((clock().min+1)/5)*5;
 let CMP=0,refT=0;
+/* Real walks to the stops around the start and from the stops around the end (and walking the whole way). Falls back to
+   the straight-line guess when the streets are not mapped there or the street data is slow to come. */
+async function realWalks(q){
+ try{
+  const cut=new Promise(r=>setTimeout(()=>r(null),2500));
+  const [a,b]=await Promise.race([Promise.all([WALK.from(q.from,RT.near(q.from,ACCESS)),WALK.from(q.to,RT.near(q.to,ACCESS))]),cut.then(()=>[null,null])]);
+  const use=w=>w&&w.list.filter(([,m])=>m!==Infinity).map(([s,m,sl])=>[s,m==null?sl:m/DETOUR]);
+  if(a){q.acc=use(a);const d=a.to(q.to);if(d<Infinity)q.directM=d}
+  if(b)q.egr=use(b);
+ }catch(e){}
+}
 async function compute(o={}){
  clearTimeout(refT);
  if(!RT||!state.to)return;
@@ -1001,13 +1017,16 @@ async function compute(o={}){
  if(Date.now()-DELAYS_AT>45000)freshLive()
  const ymd=W.k==='now'?c.ymd:addDays(c.ymd,W.day),t=W.k==='now'?c.min:W.t;
  const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,board:P.bw,boardFast:P.bf,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
+ await realWalks(q);if(my!==CMP)return;
  const fast=state.run&&W.k==='now';
+ const goNowOk=()=>W.k==='now'&&!fast&&(P.bw||0)>0;
  const run=()=>W.k==='arr'?RT.arriveBy(q):W.k==='last'?RT.lastOne(q):W.k==='first'?RT.firstOne(q):fast?RT.fastPlan(q):RT.plan(q);
  let r=run();
  if(live){
   for(let pass=0;pass<2;pass++){
    const stops=new Set();for(const j of r.journeys)if(j)for(const l of j.legs)if(l.m==='ride')stops.add(l.fromStop);
    if(fast){const n=RT.plan(q);for(const j of n.journeys)for(const l of j.legs)if(l.m==='ride')stops.add(l.fromStop)}
+   if(goNowOk()){const n=RT.plan({...q,boardFirst:0},3);for(const j of n.journeys)for(const l of j.legs)if(l.m==='ride')stops.add(l.fromStop)}
    const need=[...stops].filter(s=>!SEEN.has(s));if(!need.length)break;
    await delaysFor(RT,need,ymd,DELAYS);need.forEach(s=>SEEN.add(s));
    if(my!==CMP)return;
@@ -1015,6 +1034,14 @@ async function compute(o={}){
   }
  }
  if(my!==CMP)return;
+ // "go now": a bus that comes a bit sooner than the margin allows, shown as an extra choice (live time known)
+ let tight=null;
+ if(goNowOk()){
+  const sg=j=>j.legs.filter(l=>l.m==='ride').map(l=>l.key+'@'+l.i0).join('|'),have=new Set(r.journeys.filter(Boolean).map(sg));
+  const bestA=Math.min(Infinity,...r.journeys.filter(Boolean).map(j=>j.arr),r.walk?c.min+r.walk.min:Infinity);
+  const rides=Math.min(9,...r.journeys.filter(Boolean).map(j=>j.rides));
+  tight=RT.plan({...q,boardFirst:0},3).journeys.filter(j=>{if(!j||have.has(sg(j))||j.arr>bestA-1||j.dep<c.min||j.rides>rides)return false;const f=j.legs.find(l=>l.m==='ride');return!live||DELAYS.has(f.key)}).sort((a,b)=>a.arr-b.arr)[0]||null;
+ }
  let bestWalk=null;
  if(fast){const n=RT.plan(q);if(n.journeys.length)bestWalk=Math.min(...n.journeys.map(j=>j.arr))}
  const ctx={plan:!live,now:c.min};
@@ -1028,11 +1055,13 @@ async function compute(o={}){
   if(W.k==='arr')late.badge=['ink','Lahkud kõige hiljem'];
   if(W.k==='last')late.badge=['ink','Viimane'];
   if(W.k==='first')L[0].badge=['ink','Esimene'];
+  if(tight){const T=viewJ(tight,ctx);T.tight=Math.max(0,Math.floor(tight.dep-c.min));T.badge=['tight','Kiirusta'];ROUTES[T.id]=T;L.unshift(T)}
   if(fast)for(const R of L){if(!R.run)continue;const g=bestWalk!=null?Math.round(bestWalk-R.arr):0;if(g>=1)R.badge=['gain',`${g} min varem`];R.runcard=runCard(R,bestWalk)}
  }
  state.list=L;state.walk=r.walk;
  const keep=L.find(R=>R.sig===prevSig);
- state.sel=o.first||!keep?(L[0]&&L[0].id):keep.id;
+ const safe=L.find(R=>R.tight==null)||L[0];
+ state.sel=o.first||!keep?(safe&&safe.id):keep.id;
  if(state.view==='results'){renderResults(false);drawFor('results',{instant:!o.fresh,keepCam:!o.fresh})}
  else if(state.view==='route'){if(!state.sel){go('results');return}const t=sbody.scrollTop;renderRoute();sbody.scrollTop=t;drawFor('route',{instant:!o.fresh,keepCam:!o.fresh})}
  lens();
@@ -1056,13 +1085,20 @@ function alarmable(R){
 function setAlarm(R){
  const f=R.j.legs.find(l=>l.m==='ride'),p=TT.pats[f.pi],r=TT.routes[p.r];
  unpush();
- ALARM={ymd:clock().ymd,sig:R.sig,key:f.key,stop:f.fromStop,sched:f.sched,delay:f.delay||0,lead:f.a-R.dep,m:r[1],n:r[0],to:state.to.n,fired:0};
+ ALARM={ymd:clock().ymd,sig:R.sig,key:f.key,stop:f.fromStop,sched:f.sched,delay:f.delay||0,lead:f.a-R.dep,m:r[1],n:r[0],to:state.to.n,fired:0,rides:alarmRides(R)};
  saveAlarm();
  const ask=window.Notification&&Notification.permission==='default'?Notification.requestPermission():Promise.resolve();
  ask.catch(()=>{}).then(()=>Promise.race([pushAlarm(),new Promise(r=>setTimeout(()=>r(false),8000))])).then(ok=>{const left=alarmLeave()-LEAD-alarmNow();
   const ios=/iP(hone|ad|od)/.test(navigator.userAgent)&&!standalone();
   toast(left<=0?'Mine kohe!':`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut.`+(ok?'':ios?' Lukus telefonile teavituse saamiseks lisa äpp avaekraanile. Praegu hoia äpp lahti.':' Hoia äpp lahti.'));
   tickAlarm();if(state.view==='route')renderRoute()});
+}
+// the trip's rides, so transfers can be watched on the way: stop indexes, scheduled times, walk minutes before each
+function alarmRides(R){
+ const out=[];let w=0;
+ for(const l of R.j.legs){if(l.m==='walk'){if(out.length)w+=(l.b-l.a)||0;continue}
+  const r=TT.routes[TT.pats[l.pi].r];out.push({m:r[1],n:r[0],key:l.key,s0:l.fromStop,s1:l.toStop,t0:l.sched,t1:l.schedB,w:Math.round(w*10)/10});w=0}
+ return out.length>1?out:null;
 }
 // the server copy of the reminder (Web Push): needs notifications allowed and a push service
 async function pushAlarm(){
@@ -1071,7 +1107,7 @@ async function pushAlarm(){
   const a=ALARM,reg=await navigator.serviceWorker.ready;
   let sub=await reg.pushManager.getSubscription();
   if(!sub){const {key}=await (await fetch('/api/push/key')).json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key})}
-  const res=await fetch('/api/push/alarm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub:sub.toJSON(),ymd:a.ymd,siri:TT.stops.siri[a.stop]||0,mode:a.m,route:a.n,sched:a.sched,lead:a.lead,delay:a.delay,stop:stopName(a.stop),dest:a.to})});
+  const res=await fetch('/api/push/alarm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub:sub.toJSON(),ymd:a.ymd,siri:TT.stops.siri[a.stop]||0,mode:a.m,route:a.n,sched:a.sched,lead:a.lead,delay:a.delay,stop:stopName(a.stop),dest:a.to,legs:a.rides?a.rides.map(x=>({m:x.m,n:x.n,s0:TT.stops.siri[x.s0]||0,s1:TT.stops.siri[x.s1]||0,t0:x.t0,t1:x.t1,n0:stopName(x.s0),n1:stopName(x.s1),w:x.w})):undefined})});
   if(!res.ok)return false;
   const {id}=await res.json();if(ALARM!==a){fetch('/api/push/alarm?id='+id,{method:'DELETE'}).catch(()=>{});return false}
   a.pid=id;saveAlarm();return true;
@@ -1081,7 +1117,11 @@ function unpush(){if(ALARM&&ALARM.pid)fetch('/api/push/alarm?id='+ALARM.pid,{met
 function clearAlarm(){unpush();ALARM=null;saveAlarm();clearTimeout(alarmT);$('#alarmBar')?.remove();if(state.view==='route')renderRoute()}
 async function tickAlarm(){
  clearTimeout(alarmT);if(!ALARM)return;
- if(alarmNow()>alarmLeave()+2){clearAlarm();return}
+ if(alarmNow()>alarmLeave()+2){
+  const X=ALARM.rides,last=X&&X[X.length-1];
+  if(!last||alarmNow()>last.t0+(last.d0||0)+3){clearAlarm();return}
+  $('#alarmBar')?.remove();await watchXfer();if(ALARM)alarmT=setTimeout(tickAlarm,30000);return;
+ }
  // the first ride's live delay
  if(RT&&TT.stops.siri[ALARM.stop]&&!ALARM.fired&&alarmLeave()-alarmNow()<60){try{const r=await siri(TT.stops.siri[ALARM.stop],30000);const d=RT.matchSiri(ALARM.stop,r.rows,ALARM.ymd).get(ALARM.key);if(d!=null&&ALARM){ALARM.delay=d;saveAlarm()}}catch(e){}}
  if(!ALARM)return;
@@ -1089,6 +1129,28 @@ async function tickAlarm(){
  if(!ALARM.fired&&left<=LEAD+.1){ALARM.fired=1;saveAlarm();fireAlarm(Math.max(0,Math.round(left)))}
  alarmBar();
  alarmT=setTimeout(tickAlarm,ALARM.fired?20000:15000);
+}
+/* On the way: when the ride you are on gets off and the next one leaves (SIRI at both stops); once per transfer a
+   warning when the next one will be gone before you can walk to it. The server does the same as a push. */
+async function watchXfer(){
+ const X=ALARM.rides,now=alarmNow(),ymd=ALARM.ymd;let ch=false;
+ const live=async(stop,key)=>{if(!TT.stops.siri[stop]||!RT)return null;try{const r=await siri(TT.stops.siri[stop],20000);const d=RT.matchSiri(stop,r.rows,ymd).get(key);return d??null}catch(e){return null}};
+ if(X[0].d0==null&&ALARM.delay)X[0].d0=ALARM.delay;
+ for(let i=1;i<X.length;i++){
+  const a=X[i-1],b=X[i];
+  if(b.x||now>b.t0+(b.d0||0)+2||b.t0-now>40||now<a.t0+(a.d0||0)-2)continue;
+  const d1=await live(a.s1,a.key),d0=await live(b.s0,b.key);if(!ALARM)return;
+  if(d1!=null){a.d1=d1;ch=true}if(d0!=null){b.d0=d0;ch=true}
+  const arrive=a.t1+(a.d1??a.d0??0),leaves=b.t0+(b.d0||0);
+  if(leaves-(arrive+b.w)<0&&(d1!=null||d0!=null)){
+   b.x=1;ch=true;
+   const title='Ümberistumine võib jääda ära',body=`${MODE[a.m]} ${a.n} jõuab peatusesse ${stopName(a.s1)} ${hm(arrive)}, ${MODE[b.m].toLowerCase()} ${b.n} väljub ${b.s0!==a.s1?`peatusest ${stopName(b.s0)} `:''}${hm(leaves)}. Ava äpp, et leida uus teekond.`;
+   try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+   if(window.Notification&&Notification.permission==='granted'&&!ALARM.pid){const o={body,tag:'buss-xfer',icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',renotify:true};(navigator.serviceWorker?navigator.serviceWorker.getRegistration():Promise.resolve(null)).then(r=>r?r.showNotification(title,o):new Notification(title,o)).catch(()=>{})}
+   toast(`${title}: ${body}`);
+  }
+ }
+ if(ch)saveAlarm();
 }
 function fireAlarm(min){
  const title=min>=1?`Mine ${min} min pärast`:'Mine kohe',body=`${MODE[ALARM.m]} ${ALARM.n} väljub ${hm(ALARM.sched+ALARM.delay)} peatusest ${stopName(ALARM.stop)} · ${ALARM.to}`;
