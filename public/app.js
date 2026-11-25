@@ -1,6 +1,6 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=53291b17';
-import { walker } from './walk.js?v=74ccd5aa';
+import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=a4e6ca5d';
+import { walker } from './walk.js?v=2392f91c';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 /* ================= icons ================= */
@@ -103,7 +103,22 @@ function rideCoords(l){
  if(!Q||!ds||ds[r.i1]<=ds[r.i0])return p.s.slice(r.i0,r.i1+1).map(stopLL);
  return sub(Q,ds[r.i0],ds[r.i1]);
 }
-function walkCoords(l){const r=l.raw;return[r.from||stopLL(r.fromStop),r.to||stopLL(r.toStop)]}
+/* walks follow the streets (walk.js); until the shape is known (a few ms) the straight line stands in */
+const WGEO=new Map();let walkRedraw=0;
+function walkCoords(l){
+ const r=l.raw,a=r.from||stopLL(r.fromStop),b=r.to||stopLL(r.toStop),k=a.join()+'|'+b.join();
+ const g=WGEO.get(k);if(g)return g;
+ if(!WGEO.has(k)){WGEO.set(k,null);WALK.path(a,b,r.fromStop??null,r.toStop??null).then(c=>{
+  if(!c||c.length<2)return;c[0]=a;c[c.length-1]=b;WGEO.set(k,c);if(WGEO.size>400)WGEO.delete(WGEO.keys().next().value);
+  clearTimeout(walkRedraw);walkRedraw=setTimeout(redrawWalks,60)}).catch(()=>{})}
+ return[a,b];
+}
+// when walk shapes arrive: the drawn route again (after its reveal animation), and its labels
+function redrawWalks(){
+ if(!map||(state.view!=='results'&&state.view!=='route')||!ROUTES[state.sel])return;
+ if(revealing){walkRedraw=setTimeout(redrawWalks,200);return}
+ drawRoutes(curList(),state.sel,false);if(state.view==='route')labels(ROUTES[state.sel]);
+}
 function legCoords(l){return l.raw.m==='ride'?rideCoords(l):walkCoords(l)}
 
 /* turn a planner journey into what the cards show */
@@ -237,7 +252,7 @@ function addVehLayers(){
 }
 
 /* ---- draw journeys, the selected one highlighted, with a reveal ---- */
-let reveal=null;
+let reveal=null,revealing=false;
 function drawRoutes(ids,sel,animate){
  const feats=[],stops=[];
  for(const id of ids){
@@ -256,7 +271,7 @@ function drawRoutes(ids,sel,animate){
  }
  const fc={type:'FeatureCollection',features:feats};
  map.getSource('rstops').setData({type:'FeatureCollection',features:animate&&!RM?[]:stops});
- if(!animate||RM){map.getSource('rt').setData(fc);return}
+ if(!animate||RM){cancelAnimationFrame(reveal);revealing=false;map.getSource('rt').setData(fc);return}
  const selF=feats.filter(f=>f.properties.sel),other=feats.filter(f=>!f.properties.sel);
  const lens=selF.map(f=>prep(f.geometry.coordinates));const tot=lens.reduce((a,q)=>a+q.L,0)||1;
  const t0=performance.now(),dur=1100;cancelAnimationFrame(reveal);
@@ -264,9 +279,9 @@ function drawRoutes(ids,sel,animate){
   const p=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-p,3);let left=e*tot;const out=[...other];
   selF.forEach((f,i)=>{if(left<=0)return;const Q=lens[i];const d=Math.min(Q.L,left);left-=Q.L;if(d>1)out.push({...f,geometry:{type:'LineString',coordinates:sub(Q,0,d)}})});
   map.getSource('rt').setData({type:'FeatureCollection',features:out});
-  if(p<1)reveal=requestAnimationFrame(step);else map.getSource('rstops').setData({type:'FeatureCollection',features:stops});
+  if(p<1)reveal=requestAnimationFrame(step);else{revealing=false;map.getSource('rstops').setData({type:'FeatureCollection',features:stops})}
  };
- reveal=requestAnimationFrame(step);
+ revealing=true;reveal=requestAnimationFrame(step);
 }
 const pt=(c,colr,big)=>({type:'Feature',properties:{col:colr,big},geometry:{type:'Point',coordinates:c}});
 
@@ -288,7 +303,7 @@ function addLayers(){
  map.addLayer({id:'gh-line',type:'line',source:'gh',layout:{'line-cap':'round'},paint:{'line-color':['get','col'],'line-width':2.4,'line-dasharray':[1.2,1.6],'line-opacity':.85}});
 }
 function col(mode){return css('--'+(mode==='wait'?'walk':mode))}
-function clearRoutes(){cancelAnimationFrame(reveal);map.getSource('rt').setData(EMPTY);map.getSource('rstops').setData(EMPTY);map.getSource('gh').setData(EMPTY)}
+function clearRoutes(){cancelAnimationFrame(reveal);revealing=false;map.getSource('rt').setData(EMPTY);map.getSource('rstops').setData(EMPTY);map.getSource('gh').setData(EMPTY)}
 /* ---- camera ---- */
 function pad(){
  if(isDesk())return state.view==='route'?{top:110,bottom:120,left:16+420+90,right:200}:{top:96,bottom:80,left:16+420+70,right:120};
@@ -574,7 +589,7 @@ function renderResults(loading){
  $('#resSub').innerHTML=loading?(whenLive()?'Arvutan live-aegadega…':'Arvutan sõiduplaani järgi…'):esc(state.to.n)+(sub?' · '+sub:'');
  if(loading){$('#resBody').innerHTML='<div class="loadbar"><i></i></div>';return}
  const c=clock();
- let out=`<div class="legend"><button class="whenchip" id="whenChip" aria-expanded="false" aria-controls="rWhen">${I.clock}${whenTxt()}<span class="cv">${I.chev}</span></button>${W.k==='now'?`<span><i class="l1"></i>live ${hm(c.min)}</span><span><i class="l2"></i>sõiduplaani järgi</span>`:whenLive()?`<span><i class="l1"></i>live</span>`:`<span><i class="l2"></i>kõik sõiduplaani järgi</span>`}</div><div class="when rw" id="rWhen" hidden></div>`;
+ let out=`<div class="legend"><button class="whenchip" id="whenChip" aria-expanded="false" aria-controls="rWhen">${I.clock}${whenTxt()}<span class="cv">${I.chev}</span></button>${nowBtn()}${W.k==='now'?`<span><i class="l1"></i>live ${hm(c.min)}</span><span><i class="l2"></i>sõiduplaani järgi</span>`:whenLive()?`<span><i class="l1"></i>live</span>`:`<span><i class="l2"></i>kõik sõiduplaani järgi</span>`}</div><div class="when rw" id="rWhen" hidden></div>`;
  if(!L.length){
   out+=`<div class="note">${W.k==='first'||W.k==='last'?'Sel päeval ühendust ei leidnud.':'Ühistranspordiga ei leidnud kiiremat teed kui jalgsi.'} ${state.walk?`Jalgsi ${fmtM(state.walk.m)}, umbes ${mins(state.walk.min)} min.`:''}</div>${ATTR}`;
   $('#resBody').innerHTML=out;bindWhenChip();return;
@@ -586,7 +601,7 @@ function renderResults(loading){
  out+=`<div class="axis">${ticks.join('')}</div><div class="routes">`;
  L.forEach(R=>{out+=routeCard(R,R.id===state.sel)});
  out+='</div>';
- if(state.walk&&W.k==='now')out+=`<div class="walkline"><span class="lg walk">${I.walk}${mins(state.walk.min)}</span>Kogu tee jalgsi: ${fmtM(state.walk.m)}, kohal ${hm(c.min+state.walk.min)}</div>`;
+ if(state.walk&&W.k==='now')out+=`<div class="walkline"><span class="lg walk">${I.walk}${mins(state.walk.min)}</span>Kogu tee jalgsi: ${fmtM(state.walk.m)}, kohal ${hm((state.t0?state.t0.min:c.min)+state.walk.min)}</div>`;
  out+=ATTR;
  $('#resBody').innerHTML=out;
  $$('#resBody .route').forEach(el=>{el.onclick=()=>{state.sel=el.dataset.id;go('route')};el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}};el.onmouseenter=()=>{if(isDesk()&&state.view==='results')previewRoute(el.dataset.id)}});
@@ -604,7 +619,7 @@ function stepLive(l){
 }
 function renderRoute(){
  const R=ROUTES[state.sel];if(!R){go('results');return}
- let s=`<div class="dsum">${span(R)}</div><div class="dmeta"><span class="dur">${dur(R)} min</span>${badge(R)}</div>${ALARM&&ALARM.sig===R.sig?`<button class="alarmbtn on" id="alarmBtn">${I.bell}Teavitan ${hm(alarmLeave()-LEAD)} · tühista</button>`:alarmable(R)?`<button class="alarmbtn" id="alarmBtn">${I.bell}Teavita 5 min enne minekut</button>`:''}<div class="legs">${chips(R)}</div>`;
+ let s=`${t0Behind()>=1?`<div class="nowrow">Arvutatud kell ${hm(state.t0.min)}${nowBtn()}</div>`:''}<div class="dsum">${span(R)}</div><div class="dmeta"><span class="dur">${dur(R)} min</span>${badge(R)}</div>${ALARM&&ALARM.sig===R.sig?`<button class="alarmbtn on" id="alarmBtn">${I.bell}Teavitan ${hm(alarmLeave()-LEAD)} · tühista</button>`:alarmable(R)?`<button class="alarmbtn" id="alarmBtn">${I.bell}Teavita 5 min enne minekut</button>`:''}<div class="legs">${chips(R)}</div>`;
  if(R.tight!=null)s+=`<div class="tightbox">${I.warn}<span>${tightTxt(R)}</span></div>`;
  if(R.runcard)s+=`<div class="runcard ${eff(R)}"><span class="ri">${I[eff(R)]}</span><span class="big">${R.runcard.big}</span><span class="rs">${R.runcard.rs}</span><div class="rf">${R.runcard.rf}</div></div>`;
  const c=clock();
@@ -692,10 +707,10 @@ const geoCache=new Map();
 async function geocode(q){
  if(geoCache.has(q))return geoCache.get(q);
  const c=state.me||DEF_LL,out=[];
- const ads=fetch(`https://inaadress.maaamet.ee/inaadress/gazetteer?address=${encodeURIComponent(q)}&results=5`).then(r=>r.json()).then(j=>{for(const a of j.addresses||[]){if(!a.viitepunkt_b)continue;out.push({n:a.aadresstekst||a.ipikkaadress,s:[a.asustusyksus,a.omavalitsus].filter(Boolean).join(', '),ll:[+a.viitepunkt_l,+a.viitepunkt_b],src:'ads'})}}).catch(()=>{});
- const ph=fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${c[1].toFixed(3)}&lon=${c[0].toFixed(3)}&limit=6&bbox=24.3,59.25,25.2,59.6`).then(r=>r.json()).then(j=>{for(const f of j.features||[]){const p=f.properties;if(!p.name&&!p.street)continue;const n=p.name||[p.street,p.housenumber].filter(Boolean).join(' ');out.push({n,s:[p.name?[p.street,p.housenumber].filter(Boolean).join(' '):'',p.district||p.city].filter(Boolean).join(', '),ll:f.geometry.coordinates,src:'ph'})}}).catch(()=>{});
+ const ads=fetch(`https://inaadress.maaamet.ee/inaadress/gazetteer?address=${encodeURIComponent(q)}&results=10`).then(r=>r.json()).then(j=>{for(const a of j.addresses||[]){if(!a.viitepunkt_b)continue;const la=+a.viitepunkt_b,lo=+a.viitepunkt_l;if(la<59.25||la>59.6||lo<24.3||lo>25.2)continue;out.push({n:a.aadresstekst||a.ipikkaadress,s:[a.asustusyksus,a.omavalitsus].filter(Boolean).join(', '),ll:[+a.viitepunkt_l,+a.viitepunkt_b],src:'ads'})}}).catch(()=>{});
+ const ph=fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${c[1].toFixed(3)}&lon=${c[0].toFixed(3)}&limit=6&lang=default&bbox=24.3,59.25,25.2,59.6`).then(r=>r.json()).then(j=>{for(const f of j.features||[]){const p=f.properties;if(!p.name&&!p.street)continue;if(/^(bus_stop|platform|stop_position|tram_stop|stop|halt)$/.test(p.osm_value)&&/^(highway|public_transport|railway)$/.test(p.osm_key))continue;const n=p.name||[p.street,p.housenumber].filter(Boolean).join(' ');out.push({n,s:[p.name?[p.street,p.housenumber].filter(Boolean).join(' '):'',p.district||p.city].filter(Boolean).join(', '),ll:f.geometry.coordinates,src:'ph'})}}).catch(()=>{});
  await Promise.all([ads,ph]);
- const nq=norm(q),sc=p=>{const n=norm(p.n);return n===nq?0:n.startsWith(nq)?1:n.includes(nq)?2:p.src==='ads'&&/\d/.test(q)?1.5:3};out.sort((x,y)=>sc(x)-sc(y));
+ const nq=norm(q),sc=p=>(m(c,p.ll)>15000?1.2:0)+sc0(p),sc0=p=>{const n=norm(p.n);return n===nq?0:n.startsWith(nq)?1:n.includes(nq)?2:p.src==='ads'&&/\d/.test(q)?1.5:3};out.sort((x,y)=>sc(x)-sc(y)||m(c,x.ll)-m(c,y.ll));
  const seen=[];const res=out.filter(p=>{if(seen.some(o=>norm(o.n)===norm(p.n)&&m(o.ll,p.ll)<150))return false;seen.push(p);return true}).slice(0,8);
  geoCache.set(q,res);return res;
 }
@@ -772,7 +787,11 @@ const tStr=t=>`${Math.floor(t/60)%24}:${String(t%60).padStart(2,'0')}`;
 const tVal=t=>`${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
 /* live data takes over when the trip leaves within 30 min; further ahead it is the timetable */
 function whenLive(){const W=state.when;if(W.k==='now')return true;if(W.k!=='dep'&&W.k!=='arr')return false;return W.day*1440+(W.k==='arr'?W.t-30:W.t)-clock().min<=30}
-function whenTxt(){const W=state.when,d=W.day?dayLbl(W.day,true)+' ':'';
+// minutes the fixed start time is behind now (0 when not "Lahku kohe")
+function t0Behind(){const W=state.when,T=state.t0;if(W.k!=='now'||!T)return 0;const c=clock();return (c.ymd>T.ymd?c.min+1440:c.min)-T.min}
+function nowBtn(){return t0Behind()>=1?`<button class="nowbtn" data-now>${I.refresh}Praegu</button>`:''}
+function toNow(){state.t0=null;freshLive();compute({})}
+function whenTxt(){const W=state.when,d=W.day?dayLbl(W.day,true)+' ':'';if(W.k==='now'&&t0Behind()>=1)return`Lahku ${hm(state.t0.min)}`;
  return W.k==='now'?'Lahku kohe':W.k==='dep'?`Lahku ${d}${tStr(W.t)}`:W.k==='arr'?`Kohal ${d}${tStr(W.t)}`:W.k==='last'?`Viimane buss${W.day?' · '+dayLbl(W.day,true):''}`:`Esimene buss · ${dayLbl(W.day,true)}`}
 function clampWhen(){const W=state.when,lo=W.day?0:nowLo();W.t=Math.max(lo,Math.min(23*60+55,W.t))}
 function whenUI(inR){
@@ -1015,7 +1034,9 @@ async function compute(o={}){
  if(!RT||!state.to)return;
  const my=++CMP,W=state.when,c=clock(),live=whenLive();
  if(Date.now()-DELAYS_AT>45000)freshLive()
- const ymd=W.k==='now'?c.ymd:addDays(c.ymd,W.day),t=W.k==='now'?c.min:W.t;
+ // "Lahku kohe" plans from the moment the search started; the refresh / "Praegu" button moves it to now
+ const T0=W.k==='now'?(state.t0||(state.t0={ymd:c.ymd,min:c.min})):null;
+ const ymd=T0?T0.ymd:addDays(c.ymd,W.day),t=T0?T0.min:W.t;
  const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,board:P.bw,boardFast:P.bf,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
  await realWalks(q);if(my!==CMP)return;
  const fast=state.run&&W.k==='now';
@@ -1038,7 +1059,7 @@ async function compute(o={}){
  let tight=null;
  if(goNowOk()){
   const sg=j=>j.legs.filter(l=>l.m==='ride').map(l=>l.key+'@'+l.i0).join('|'),have=new Set(r.journeys.filter(Boolean).map(sg));
-  const bestA=Math.min(Infinity,...r.journeys.filter(Boolean).map(j=>j.arr),r.walk?c.min+r.walk.min:Infinity);
+  const bestA=Math.min(Infinity,...r.journeys.filter(Boolean).map(j=>j.arr),r.walk?q.t+r.walk.min:Infinity);
   const rides=Math.min(9,...r.journeys.filter(Boolean).map(j=>j.rides));
   tight=RT.plan({...q,boardFirst:0},3).journeys.filter(j=>{if(!j||have.has(sg(j))||j.arr>bestA-1||j.dep<c.min||j.rides>rides)return false;const f=j.legs.find(l=>l.m==='ride');return!live||DELAYS.has(f.key)}).sort((a,b)=>a.arr-b.arr)[0]||null;
  }
@@ -1178,6 +1199,7 @@ function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=nul
 
 /* ================= navigation ================= */
 function go(v,o={}){
+ if(v==='results'&&o.fresh)state.t0=null;
  const prevV=state.view;state.view=v;document.body.dataset.view=v;state.prev=null;if(prevV!==v)sbody.scrollTop=0;
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
@@ -1277,10 +1299,11 @@ grab.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDe
 $('#openSearch').onclick=()=>{state.from=null;go('search')};
 function placeSearch(){const b=$('#openSearch'),dock=!isDesk();b.classList.toggle('glass',!dock);if(dock){if(b.parentNode!==$('#sdock'))$('#sdock').prepend(b)}else if(b.parentNode!==$('.top'))$('.top').prepend(b)}
 placeSearch();matchMedia('(min-width: 900px)').addEventListener('change',()=>{placeSearch();setSheet(snapFor(state.view),true);lens(true)});
-$('#refresh').onclick=()=>{const b=$('#refresh');b.classList.remove('spin');void b.offsetWidth;b.classList.add('spin');pollVeh();loadNear(true);if(state.view==='results'||state.view==='route'){freshLive();compute({})}};
+$('#refresh').onclick=()=>{const b=$('#refresh');b.classList.remove('spin');void b.offsetWidth;b.classList.add('spin');pollVeh();loadNear(true);if(state.view==='results'||state.view==='route')toNow()};
 $('#sBack').onclick=()=>go('home');
 $('#ftBack').onclick=()=>go(state.view==='route'?'results':'home');
 $('#rBack').onclick=()=>go('results');
+document.addEventListener('click',e=>{if(e.target.closest('[data-now]')){e.stopPropagation();toNow()}});
 $('#ftSwap').onclick=swap;
 $('#ftFrom').parentNode.onclick=()=>go('search',{field:'from'});
 $('#ftTo').parentNode.onclick=()=>go('search',{field:'to'});
@@ -1483,3 +1506,5 @@ if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
 else{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
 window.BUSS={get map(){return map},state,ROUTES,get RT(){return RT},MOV,get VEHS(){return VEHS}}; // for tests in the browser console
+// for the headless tests only (?debug): no effect otherwise
+if(/[?&]debug\b/.test(location.search))window.__buss={get map(){return map},state,ROUTES,WALK,get RT(){return RT}};

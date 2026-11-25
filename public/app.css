@@ -655,3 +655,8 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 .fromto .ft-lines>div{cursor:pointer}
 .place.on .pn b{color:var(--bus)}
 .note.lochelp{margin:2px 4px 8px;font-size:13px;line-height:1.45}
+
+/* "Lahku kohe" keeps its start time; this brings it to now */
+.nowbtn{height:32px;padding:0 11px 0 9px;border-radius:var(--pill);background:var(--ink);color:var(--on-ink);display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;white-space:nowrap;border:0;cursor:pointer}
+.nowbtn svg{width:16px;height:16px}
+.nowrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text-2);margin:0 0 10px}

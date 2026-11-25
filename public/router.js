@@ -208,11 +208,17 @@ export class Router {
 
   /* Latest departure that still arrives by `t` (binary search over the leave time). */
   arriveBy(q, want = 4) {
-    let lo = q.t - 240, hi = q.t, ok = null;
-    const arr = t => { const r = this.search({ ...q, t }); const j = r.journeys.filter(Boolean).sort((a, b) => a.arr - b.arr)[0]; return j ? j.arr : Infinity; };
-    if (arr(lo) > q.t) return { journeys: [], walk: null };
+    let lo = q.t - 240, hi = q.t, ok = null, walk = null;
+    const arr = t => { const r = this.search({ ...q, t }); walk = walk || r.walk; const j = r.journeys.filter(Boolean).sort((a, b) => a.arr - b.arr)[0]; return j ? j.arr : Infinity; };
+    // the earliest start that still gets there in time; at night a search from 4 h before may find nothing at all
+    // (no service yet), so try later starts too
+    let start = null;
+    for (const back of [240, 180, 120, 90, 60, 30]) if (arr(q.t - back) <= q.t) { start = q.t - back; break; }
+    if (start == null) return { journeys: [], walk };
+    lo = start;
     while (hi - lo > 1) { const m = Math.floor((lo + hi) / 2); if (arr(m) <= q.t) { lo = m; ok = m; } else hi = m; }
-    const r = this.plan({ ...q, t: Math.max(q.t - 240, lo - 20) }, 12, 12);
+    const r = this.plan({ ...q, t: Math.max(start, lo - 20) }, 12, 12);
+    r.walk = r.walk || walk;
     r.journeys = r.journeys.filter(j => j.arr <= q.t).sort((a, b) => b.dep - a.dep).slice(0, want).sort((a, b) => a.arr - b.arr);
     return r;
   }
@@ -259,7 +265,9 @@ export class Router {
     const n = this.plan({ ...q, fast: 0 }, want);
     for (const j of n.journeys) { const p = this.pace(j, q); if (p && !out.some(o => sig(o) === sig(p))) out.push(p); }
     out.sort((a, b) => a.arr - b.arr || b.dep - a.dep);
-    return { journeys: out.slice(0, want), walk: r.walk };
+    // as in plan(): drop an option that leaves earlier and gets there no sooner than another (e.g. the same bus a stop earlier)
+    const keep = out.filter((j, i) => !out.some((o, k) => k !== i && o.arr <= j.arr && o.dep >= j.dep && (o.arr < j.arr || o.dep > j.dep || k < i)));
+    return { journeys: keep.slice(0, want), walk: r.walk };
   }
 
   // SIRI departures at one stop -> delays per trip. rows: [{route, mode, exp, sched}] in seconds

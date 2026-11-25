@@ -1,5 +1,6 @@
 // Real walking distances from OpenStreetMap, so the app stops guessing "straight line × 1.25".
-//   node tools/build-walk.mjs osm [tallinn.json]  -> public/data/walk/t_<y>_<x>.json  (street network in ~1 km tiles)
+//   node tools/build-walk.mjs osm [tallinn.json [buildings.json]]  -> public/data/walk/t_<y>_<x>.json  (street network in
+//                                                    ~1 km tiles, with a 4.5 m map of where buildings stand)
 //   node tools/build-walk.mjs stops               -> public/data/walk/stops.json     (each stop's place on the network +
 //                                                    real walks to stops nearby; run after every timetable rebuild)
 // Crossing a street costs time: traffic lights about 15 s of waiting on average, a zebra or plain crossing a few seconds. That time is
@@ -16,6 +17,46 @@ const XFER = 600, XMAX = 1100;                      // stop-to-stop walks: strai
 const R = 6371000, rad = Math.PI / 180;
 const dist = (a, b) => { const x = (b[1] - a[1]) * rad * Math.cos(((a[0] + b[0]) / 2) * rad), y = (b[0] - a[0]) * rad; return Math.sqrt(x * x + y * y) * R; };
 const tileOf = (la, lo) => `${Math.floor(la / TY)}_${Math.floor(lo / TX)}`;
+
+async function overpass(q) {
+  for (const u of ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"])
+    for (const wait of [5, 30, 60]) {
+      try {
+        const r = await fetch(u, { method: "POST", headers: { "User-Agent": "buss-walk-build", "Content-Type": "application/x-www-form-urlencoded" }, body: "data=" + encodeURIComponent(q) });
+        const t = await r.text(); if (r.ok && t.startsWith("{")) return JSON.parse(t);
+      } catch (e) {}
+      await new Promise((r) => setTimeout(r, wait * 1000));
+    }
+  throw new Error("Overpass: no answer");
+}
+// in six pieces: one query for the whole area is often refused when the servers are busy
+async function fetchBuildings() {
+  const els = [], [S, W, N, E] = BOX;
+  for (const [s, n] of [[S, 59.40], [59.40, 59.46], [59.46, N]]) for (const [w, e] of [[W, 24.76], [24.76, E]])
+    els.push(...(await overpass(`[out:json][timeout:240];way["building"](${s},${w},${n},${e});out geom qt;`)).elements);
+  return { elements: els };
+}
+// where buildings stand, per tile: NY × NX cells (about 4.5 m), 1 bit each, row by row from the south-west corner
+export const NY = 250, NX = 250;
+function buildingMap(bj, keys) {
+  const want = new Set(keys), bits = new Map();
+  const set = (k, r, c) => { let b = bits.get(k); if (!b) bits.set(k, (b = new Uint8Array((NY * NX) / 8))); const i = r * NX + c; b[i >> 3] |= 1 << (i & 7); };
+  const cy = TY / NY, cx = TX / NX;
+  for (const e of bj.elements) {
+    const t = e.tags || {}, G = e.geometry;
+    if (!G || G.length < 4 || ["roof", "carport", "no", "ruins", "construction"].includes(t.building) || t["building:part"]) continue;
+    let s = 90, w = 180, n = -90, ea = -180; for (const p of G) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); ea = Math.max(ea, p.lon); }
+    for (let y = Math.floor(s / cy); y <= Math.floor(n / cy); y++) {
+      const la = (y + 0.5) * cy, xs = [];
+      for (let i = 0, j = G.length - 1; i < G.length; j = i++) if ((G[i].lat > la) !== (G[j].lat > la)) xs.push(G[i].lon + ((la - G[i].lat) * (G[j].lon - G[i].lon)) / (G[j].lat - G[i].lat));
+      xs.sort((a, b) => a - b);
+      for (let q = 0; q + 1 < xs.length; q += 2) for (let x = Math.ceil(xs[q] / cx - 0.5); x + 0.5 <= xs[q + 1] / cx; x++) {
+        const ty = Math.floor(y / NY), tx = Math.floor(x / NX), k = `${ty}_${tx}`; if (want.has(k)) set(k, y - ty * NY, x - tx * NX);
+      }
+    }
+  }
+  return bits;
+}
 
 async function fetchOsm() {
   const q = `[out:json][timeout:180];(way["highway"]["highway"!~"motorway|motorway_link|construction|proposed|raceway|bus_guideway|abandoned|platform"](${BOX});
@@ -37,6 +78,12 @@ const walkable = (t) => {
   if (foot === "no" || foot === "private" || foot === "use_sidepath") return false;
   if ((acc === "no" || acc === "private") && !["yes", "designated", "permissive"].includes(foot)) return false;
   if (t.area === "yes" && t.highway !== "pedestrian" && t.highway !== "footway") return false;
+  // corridors inside buildings (shopping centres, stations): closed at night and drawn across the building on the map
+  if (t.highway === "corridor" || t.indoor && t.indoor !== "no" || t.location === "indoor") return false;
+  // paths on an upper or lower floor (malls, stations) unless it is a bridge
+  if (t.level != null && !/^0(;0)*$/.test(t.level) && !t.bridge) return false;
+  // car parks inside buildings: lanes covered, underground or on another floor
+  if (t.highway === "service" && (t.tunnel === "yes" || t.covered === "yes" || (t.layer && t.layer !== "0") || /parking_aisle|drive-through/.test(t.service || "") && t.covered && t.covered !== "no")) return false;
   return true;
 };
 function penalty(t) {
@@ -50,13 +97,55 @@ function penalty(t) {
   return 0;
 }
 
-async function buildOsm(file) {
+// Douglas-Peucker on [lat, lon] points, tolerance in metres
+function simplify(P, tol = 1.5) {
+  if (P.length < 3) return P;
+  const keepI = new Uint8Array(P.length); keepI[0] = keepI[P.length - 1] = 1;
+  const kx = Math.cos(P[0][0] * rad) * rad * R, ky = rad * R, st = [[0, P.length - 1]];
+  while (st.length) {
+    const [i, j] = st.pop(); let best = -1, bi = -1;
+    const ax = P[i][1] * kx, ay = P[i][0] * ky, dx = P[j][1] * kx - ax, dy = P[j][0] * ky - ay, L = dx * dx + dy * dy;
+    for (let k = i + 1; k < j; k++) {
+      const px = P[k][1] * kx - ax, py = P[k][0] * ky - ay, t = L ? Math.max(0, Math.min(1, (px * dx + py * dy) / L)) : 0;
+      const d = Math.hypot(px - t * dx, py - t * dy); if (d > best) { best = d; bi = k; }
+    }
+    if (best > tol) { keepI[bi] = 1; st.push([i, bi], [bi, j]); }
+  }
+  return P.filter((_, i) => keepI[i]);
+}
+
+async function buildOsm(file, bfile) {
   const osm = file ? JSON.parse(readFileSync(file, "utf8")) : await fetchOsm();
+  const bj = bfile ? { elements: bfile.split(",").flatMap((f) => JSON.parse(readFileSync(f, "utf8")).elements) } : await fetchBuildings();
+  // all tiles that may get streets, for the building map
+  const keysAll = new Set(); for (const e of osm.elements) if (e.type === "node" && e.lat != null) keysAll.add(tileOf(e.lat, e.lon));
+  const BM = buildingMap(bj, keysAll);
+  const blocked = (la, lo) => { const y = Math.floor(la / (TY / NY)), x = Math.floor(lo / (TX / NX)), ty = Math.floor(y / NY), tx = Math.floor(x / NX), b = BM.get(`${ty}_${tx}`);
+    if (!b) return false; const i = (y - ty * NY) * NX + (x - tx * NX); return !!(b[i >> 3] & (1 << (i & 7))); };
   const ll = new Map(), pen = new Map(), ways = [];
   for (const e of osm.elements) {
     if (e.type === "node") { if (e.lat != null) ll.set(e.id, [e.lat, e.lon]); const p = penalty(e.tags); if (p) pen.set(e.id, p); }
     else if (e.type === "way" && walkable(e.tags)) ways.push(e);
   }
+  // cut ways where they run inside a building (a run of steps mostly inside, 8+ m in all): a footway through a terminal,
+  // a mall or a block is not a way to walk at night and is drawn across the building on the map
+  let dropIn = 0;
+  for (let i = ways.length - 1; i >= 0; i--) {
+    const w = ways[i], t = w.tags; if (t.tunnel || t.bridge || (t.covered && t.covered !== "no") || (t.layer && t.layer !== "0")) continue;
+    const ns = w.nodes.filter((n) => ll.has(n)), bad = [];
+    for (let k = 1; k < ns.length; k++) { const A = ll.get(ns[k - 1]), B = ll.get(ns[k]), L = dist(A, B), n = Math.max(1, Math.ceil(L / 2)); let ins = 0;
+      for (let q = 0; q < n; q++) { const f = (q + 0.5) / n; if (blocked(A[0] + f * (B[0] - A[0]), A[1] + f * (B[1] - A[1]))) ins += L / n; }
+      bad.push(ins >= L * 0.6 ? ins : -1); }
+    // runs of bad steps; cut only runs with 8+ m inside
+    const cut = new Array(bad.length).fill(false);
+    for (let k = 0; k < bad.length;) { if (bad[k] < 0) { k++; continue; } let e = k, m = 0; while (e < bad.length && bad[e] >= 0) m += bad[e++]; if (m >= 8) for (let q = k; q < e; q++) cut[q] = true; k = e; }
+    if (!cut.some(Boolean)) continue;
+    const parts = []; let cur = [ns[0]];
+    for (let k = 1; k < ns.length; k++) { if (cut[k - 1]) { if (cur.length > 1) parts.push(cur); cur = [ns[k]]; } else cur.push(ns[k]); }
+    if (cur.length > 1) parts.push(cur);
+    ways.splice(i, 1, ...parts.map((nodes) => ({ ...w, nodes }))); dropIn++;
+  }
+  console.log(`cut ${dropIn} paths where they run inside buildings`);
   // nodes kept in the network: where ways meet or end; the rest are folded into the edges
   const use = new Map();
   for (const w of ways) w.nodes.forEach((n, i) => use.set(n, (use.get(n) || 0) + (i === 0 || i === w.nodes.length - 1 ? 2 : 1)));
@@ -66,14 +155,19 @@ async function buildOsm(file) {
   for (const w of ways) {
     const f = w.tags.highway === "steps" ? 1.4 : 1;
     const ns = w.nodes.filter((n) => ll.has(n)); if (ns.length < 2) continue;
-    let a = ns[0], len = 0;
+    let a = ns[0], len = 0, mid = [];
     for (let i = 1; i < ns.length; i++) {
       const n = ns[i]; len += dist(ll.get(ns[i - 1]), ll.get(n)) * f;
       if (i === ns.length - 1 || use.get(n) > 1) {
         const A = keep(a), B = keep(n);
-        if (A !== B) { const k = A < B ? A + "," + B : B + "," + A, wt = Math.round(len); if (!edges.has(k) || edges.get(k) > wt) edges.set(k, wt); }
-        a = n; len = 0;
-      } else len += pen.get(n) || 0;             // a crossing in the middle of a stretch
+        if (A !== B) {
+          // the stretch's shape (points between its ends, simplified to ~1.5 m), stored from the lower id to the higher
+          const pts = simplify([ll.get(a), ...mid.map((x) => ll.get(x)), ll.get(n)]).slice(1, -1);
+          const k = A < B ? A + "," + B : B + "," + A, wt = Math.round(len), g = A < B ? pts : pts.reverse();
+          if (!edges.has(k) || edges.get(k).w > wt) edges.set(k, { w: wt, g });
+        }
+        a = n; len = 0; mid = [];
+      } else { len += pen.get(n) || 0; mid.push(n); } // a crossing in the middle of a stretch
     }
   }
   // drop small separate pieces (a courtyard path that meets no street): a place snapped there could not get anywhere
@@ -85,17 +179,20 @@ async function buildOsm(file) {
   for (const k of [...edges.keys()]) if (!big(+k.split(",")[0])) edges.delete(k);
   console.log(`dropped ${nodes.filter((_, i) => !big(i)).length} points in ${size.filter((n) => n < 40).length} small pieces`);
   // tiles: each node in its tile, each edge in the tiles of both its ends
-  const T = new Map(), tile = (k) => T.get(k) || T.set(k, { n: [], e: [] }).get(k);
+  // tile: n = [id, lat5, lon5, penalty, ...], e = [a, b, metres, ...], g = per stretch its inner points [lat5, lon5, ...] or 0
+  const T = new Map(), tile = (k) => T.get(k) || T.set(k, { n: [], e: [], g: [] }).get(k);
   nodes.forEach(([la, lo, p], i) => { if (big(i)) tile(tileOf(la / 1e5, lo / 1e5)).n.push(i, la, lo, p); });
-  for (const [k, w] of edges) {
+  for (const [k, { w, g }] of edges) {
     const [a, b] = k.split(",").map(Number), ta = tileOf(nodes[a][0] / 1e5, nodes[a][1] / 1e5), tb = tileOf(nodes[b][0] / 1e5, nodes[b][1] / 1e5);
-    tile(ta).e.push(a, b, w); if (tb !== ta) tile(tb).e.push(a, b, w);
+    const geo = g.length ? g.flatMap(([la, lo]) => [Math.round(la * 1e5), Math.round(lo * 1e5)]) : 0;
+    tile(ta).e.push(a, b, w); tile(ta).g.push(geo);
+    if (tb !== ta) { tile(tb).e.push(a, b, w); tile(tb).g.push(geo); }
   }
   mkdirSync(OUT, { recursive: true });
   for (const f of readdirSync(OUT)) if (f.startsWith("t_")) (await import("node:fs")).unlinkSync(join(OUT, f));
   let bytes = 0;
-  for (const [k, t] of T) { const s = JSON.stringify(t); bytes += s.length; writeFileSync(join(OUT, `t_${k}.json`), s); }
-  writeFileSync(join(OUT, "index.json"), JSON.stringify({ v: new Date().toISOString().slice(0, 10), ty: TY, tx: TX, tiles: [...T.keys()] }));
+  for (const [k, t] of T) { const b = BM.get(k); t.b = b ? Buffer.from(b).toString("base64") : 0; const s = JSON.stringify(t); bytes += s.length; writeFileSync(join(OUT, `t_${k}.json`), s); }
+  writeFileSync(join(OUT, "index.json"), JSON.stringify({ v: new Date().toISOString().slice(0, 10), ty: TY, tx: TX, ny: NY, nx: NX, tiles: [...T.keys()] }));
   console.log(`walk network: ${nodes.length} points, ${edges.size} stretches, ${T.size} tiles, ${(bytes / 1e6).toFixed(1)} MB`);
 }
 
@@ -128,7 +225,7 @@ function buildStops() {
   console.log(`stops: ${snap.filter(Boolean).length} of ${S.length} on the walk network, ${pairs} real stop-to-stop walks`);
 }
 
-const [cmd, file] = process.argv.slice(2);
-if (cmd === "osm") await buildOsm(file);
+const [cmd, file, bfile] = process.argv.slice(2);
+if (cmd === "osm") await buildOsm(file, bfile);
 else if (cmd === "stops") buildStops();
 else console.log("usage: node tools/build-walk.mjs osm [file] | stops");
