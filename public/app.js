@@ -245,6 +245,7 @@ async function initMap(){
   $('#map').classList.add('ready');$('#maploading').classList.add('gone');
   go(state.view,{instant:true});
   map.on('moveend',()=>{if(LBL.length)schedPlace(60)});
+  mapPins();
   map.on('click','veh-c',e=>{const f=e.features&&e.features[0];if(f)vehPopup(VEHS.find(v=>v.id===f.properties.id))});
   map.on('mouseenter','veh-c',()=>map.getCanvas().style.cursor='pointer');map.on('mouseleave','veh-c',()=>map.getCanvas().style.cursor='');
   requestAnimationFrame(tick);pollVeh();
@@ -657,7 +658,7 @@ async function loadNear(force){
  if(!RT||document.hidden||state.view!=='home')return;
  const c=state.me||DEF_LL,ns=RT.near(c,500).slice(0,10),ymd=clock().ymd;
  if(!ns.length){$('#nearSub').textContent='Lähedal peatusi pole';$('#near').innerHTML='';return}
- const st=ns[0];$('#nearSub').innerHTML=`${esc(stopName(st[0]))} · ${fmtM(st[1]*DETOUR)}${state.me?'':` · <button class="lnk" id="askLoc">luba asukoht</button>`}`;
+ const st=ns[0];$('#nearSub').innerHTML=state.me?`${esc(stopName(st[0]))} · ${fmtM(st[1]*DETOUR)}`:`Asukohta ei leitud · kesklinn · <button class="lnk" id="askLoc">luba asukoht</button>`;
  const ab=$('#askLoc');if(ab)ab.onclick=()=>locate(true);
  const rows=[];let now=null;
  let tried=0;
@@ -728,6 +729,7 @@ function renderPlaces(){
  const favs=FAVS.filter(f=>!q||has(f.n)||has(f.p));
  let h='';
  if(FIELD==='from'&&(!q||has('Sinu asukoht')))h+=meRow();
+ if(!q)h+=`<div class="prow"><button class="place" data-map="1"><span class="pi">${I.pin}</span><span class="pn"><b>Vali kaardilt</b><small>Puuduta kaardil kohta</small></span></button></div>`;
  if(favs.length)h+='<div class="sect">Lemmikud</div>'+favs.map((f,i)=>row(favPlace(f),`<span class="pi fv">${I[f.ic]}</span>`,mark(f.n),f.a,q&&i===0)).join('');
  if(!q){
   const rest=RECENT.filter(p=>!favOf(p));
@@ -744,11 +746,11 @@ function renderPlaces(){
   if(!geoCache.has(raw)){clearTimeout(gT);const my=++gq;gT=setTimeout(()=>geocode(raw).then(()=>{if(my===gq&&inp.value.trim()===raw)renderPlaces()}),220)}
  }
  $('#plist').innerHTML=h;
- $$('#plist .place').forEach(b=>b.onclick=()=>b.dataset.me?pickMe():pick(PK.get(b.dataset.k)));
+ $$('#plist .place').forEach(b=>b.onclick=()=>b.dataset.me?pickMe():b.dataset.map?pickOnMap(FIELD):pick(PK.get(b.dataset.k)));
  $$('#plist .starbtn').forEach(b=>b.onclick=()=>openSave(PK.get(b.dataset.star),b));
 }
 /* the "Kust" field: your location (asks for it when needed) or any place */
-let FIELD='to',LOCST='prompt';
+let FIELD='to',LOCST='prompt',NEEDFROM=0;
 function locHelp(){
  return isIOS?L('iPhone: Seaded → Privaatsus ja turvalisus → Asukohateenused → Safari veebisaidid → „Rakenduse kasutamise ajal“. Siis ava leht uuesti.','iPhone: Settings → Privacy & Security → Location Services → Safari Websites → “While Using the App”. Then open the page again.')
   :isAndroid?L('Puuduta aadressiriba ees olevat ikooni → Load → Asukoht → Luba. Siis ava leht uuesti.','Tap the icon left of the address bar → Permissions → Location → Allow. Then open the page again.')
@@ -781,7 +783,57 @@ function pick(p){
 }
 const fromVal=()=>state.from||state.me?fromName():'';
 const fromLL=()=>state.from?state.from.ll:(state.me||DEF_LL);
-const fromName=()=>state.from?state.from.n:state.me?'Sinu asukoht':'Kesklinn (asukoht puudub)';
+const fromName=()=>state.from?state.from.n:state.me?'Sinu asukoht':'Asukohta ei leitud';
+const hasFrom=()=>!!(state.from||state.me);
+
+/* ================= a pin on the map: long-press (right-click on a computer) or "Vali kaardilt" in search ================= */
+let pinMk=null,PICK=null,lpT=0,lpAt=null,pinAt=0;
+async function revName(ll){
+ try{const ac=new AbortController(),t=setTimeout(()=>ac.abort(),2500);
+  const j=await fetch(`https://photon.komoot.io/reverse?lat=${ll[1].toFixed(6)}&lon=${ll[0].toFixed(6)}&limit=1&lang=default`,{signal:ac.signal}).then(r=>r.json());clearTimeout(t);
+  const f=j.features&&j.features[0];if(!f||m(f.geometry.coordinates,ll)>80)return null;const q=f.properties,st=[q.street,q.housenumber].filter(Boolean).join(' ');
+  return{n:q.name||st||null,s:[q.name?st:'',q.district||q.city].filter(Boolean).join(', ')}}catch(e){return null}
+}
+const pinPlace=(ll,r)=>({n:r&&r.n?r.n:'Kaardil valitud koht',s:r&&r.n?(r.s||'Kaardilt'):`${ll[1].toFixed(5)}, ${ll[0].toFixed(5)}`,ll:[+ll[0].toFixed(6),+ll[1].toFixed(6)],pin:1});
+function dropPin(){if(pinMk){pinMk.remove();pinMk=null}}
+function usePin(field,p){
+ dropPin();if(pop){pop.remove();pop=null}$('#snote').innerHTML='';
+ if(field==='from'){state.from=p;if(state.to&&pkey(p)!==pkey(state.to)){state.sel=null;freshLive();go('results',{fresh:true})}else{go('search',{noFocus:!isDesk()});$('#q').value=state.to?state.to.n:''}}
+ else{FIELD='to';pick(p)}
+}
+function pinCard(ll){
+ if(!map||!inArea(ll))return;
+ if(pop)pop.remove();dropPin();
+ pinMk=mk(h('<div class="mpin"></div>'),ll,'bottom');
+ let p=pinPlace(ll);
+ const el=h(`<div class="vcard glass solidish pcard"><div class="ln">${I.pin}<span class="pnm">${esc(p.n)}</span></div><div class="psub">${esc(p.s)}</div><div class="pbtns"><button class="pinb" data-f="from">Alusta siit</button><button class="pinb go" data-f="to">Mine siia</button></div></div>`);
+ el.querySelectorAll('.pinb').forEach(b=>b.onclick=()=>usePin(b.dataset.f,p));
+ pinAt=Date.now();pop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:[0,-34],className:'vpop',maxWidth:'300px'}).setLngLat(ll).setDOMContent(el).addTo(map);
+ pop.on('close',()=>dropPin());
+ revName(ll).then(r=>{if(!r||!r.n||!el.isConnected)return;p=pinPlace(ll,r);el.querySelector('.pnm').textContent=p.n;el.querySelector('.psub').textContent=p.s});
+}
+// "Vali kaardilt": the sheet steps down, the next tap on the map is the place
+function pickOnMap(field){
+ PICK=field;document.body.classList.add('picking');
+ $('#pickBar').querySelector('b').textContent=field==='from'?'Puuduta kaarti: kust alustad':'Puuduta kaarti: kuhu lähed';
+ $('#pickBar').hidden=false;document.activeElement&&document.activeElement.blur();
+ if(!isDesk())setSheet(minV());
+}
+function endPick(){PICK=null;document.body.classList.remove('picking');$('#pickBar').hidden=true}
+$('#pickX').onclick=()=>{endPick();go('search',{noFocus:true})};
+async function pickedAt(ll){
+ const f=PICK;endPick();if(!inArea(ll)){toast('Vali koht Tallinna kandis');pickOnMap(f);return}
+ pinMk=mk(h('<div class="mpin"></div>'),ll,'bottom');
+ const r=await revName(ll);usePin(f,pinPlace(ll,r));
+}
+function mapPins(){
+ map.on('click',e=>{if(PICK){pickedAt([e.lngLat.lng,e.lngLat.lat]);return}if(pinMk&&pop&&Date.now()-pinAt>500){pop.remove();pop=null}});
+ map.on('contextmenu',e=>{e.preventDefault&&e.preventDefault();pinCard([e.lngLat.lng,e.lngLat.lat])});
+ const stop=()=>{clearTimeout(lpT);lpT=0};
+ map.on('touchstart',e=>{stop();const oe=e.originalEvent;if(!oe||oe.touches.length!==1||PICK)return;lpAt=e.point;const ll=[e.lngLat.lng,e.lngLat.lat];lpT=setTimeout(()=>{lpT=0;navigator.vibrate&&navigator.vibrate(12);pinCard(ll)},550)});
+ map.on('touchmove',e=>{if(lpT&&(!lpAt||Math.hypot(e.point.x-lpAt.x,e.point.y-lpAt.y)>8))stop()});
+ map.on('touchend',stop);map.on('touchcancel',stop);map.on('movestart',e=>{if(e.originalEvent&&e.originalEvent.type!=='touchstart')stop()});map.on('zoomstart',stop);
+}
 
 /* ================= time choice ================= */
 const WK=[['now','Lahku kohe'],['dep','Lahku kell'],['arr','Jõua kohale'],['last','Viimane buss'],['first','Esimene buss']];
@@ -1209,18 +1261,21 @@ function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=nul
 
 /* ================= navigation ================= */
 function go(v,o={}){
+ if(v==='results'&&!hasFrom()){v='search';o={field:'from',noFocus:o.noFocus};NEEDFROM=1}
+ if(PICK&&v!=='search')endPick();
  if(v==='results'&&o.fresh){state.t0=null;resAt=state.me}camAt=state.me;
  const prevV=state.view;state.view=v;document.body.dataset.view=v;state.prev=null;if(prevV!==v)sbody.scrollTop=0;
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
  if(v==='home'){renderHome();setSheet(snapFor('home'),o.instant)}
- if(v==='search'){setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromVal();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
+ if(v==='search'){if(PICK)endPick();setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromVal();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
  if(v==='results'){setSheet(snapFor('results'),o.instant);
   if(o.fresh||!state.list.length){state.list=[];renderResults(true);if(map&&map.getSource('rt')){clearRoutes();clearTemp();LBL=[];keyVehicles();fitTo(bboxOf([fromLL(),state.to.ll]),15.6,o.instant)}
    setTimeout(()=>compute({fresh:true,first:true}),RM?0:60)}
   else renderResults(false)}
  if(v==='route'){renderRoute();setSheet(snapFor('route'),o.instant)}
  if(v==='settings'){if(prevV!=='settings')state.back=prevV;renderSettings();setSheet(snapFor('settings'),o.instant)}
+ if(v==='search'&&NEEDFROM){NEEDFROM=0;$('#snote').innerHTML=`<div class="note">${esc('Asukohta ei leitud. Vali, kust alustad: luba asukoht, kirjuta aadress või vali kaardilt.')}</div>`}
  $('#openSet').setAttribute('aria-expanded',v==='settings');
  $('#ftFrom').textContent=fromName();if(state.to)$('#ftTo').textContent=state.to.n;
  syncRun();
@@ -1249,7 +1304,7 @@ $$('[data-run]').forEach(b=>b.onclick=()=>{
 
 /* from and to: swap turns the trip around (your location becomes the destination) */
 function swap(){
- if(!state.to)return;
+ if(!state.to||!hasFrom())return;
  const a=state.from||{n:fromName(),s:'',ll:fromLL(),me:1},b=state.to;
  state.from=b.me?null:b;state.to=a;
  $('#ftFrom').textContent=fromName();$('#ftTo').textContent=state.to.n;
@@ -1366,7 +1421,7 @@ function setMe(ll,center){
  if(!inArea(ll)){if(!outside){outside=true;toast(L('Oled Tallinnast väljas. Näitan teid kesklinnast.','You’re outside Tallinn. Showing routes from the city centre.'))}return}
  const first=!state.me;state.me=ll;
  if(meMk){meMk.setLngLat(ll);meMk.getElement().style.display=''}
- if(first){LS.set('buss-loc','1');if(state.view==='results'&&!state.from&&state.to)go('results',{fresh:true});if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
+ if(first){LS.set('buss-loc','1');if((state.view==='results'||(state.view==='search'&&FIELD==='from'&&$('#snote').textContent))&&!state.from&&state.to){$('#snote').innerHTML='';go('results',{fresh:true})}if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
  if(center&&map){camAt=ll;map.easeTo({center:ll,zoom:16,padding:pad(),duration:RM?0:700})}
  if(first){camAt=ll;nearAt=ll;resAt=ll;setFollow(FOLLOW);return}
  followMe(ll);

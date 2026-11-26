@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=ceabdfdc">
+<link rel="stylesheet" href="app.css?v=83f29ba4">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
@@ -54,6 +54,7 @@
   <button class="setbtn glass" id="openSet" aria-label="Seaded" aria-expanded="false" data-i="gear"></button>
 </header>
 
+<div class="pickbar glass solidish" id="pickBar" hidden><span data-i="pin"></span><b></b><button class="pbx" id="pickX">Tühista</button></div>
 <div class="fabs">
   <button class="fab glass locate" id="locate" aria-label="Minu asukoht" data-i="locate"></button>
   <button class="fab glass donate" id="donate" aria-label="Toeta arendust" aria-expanded="false"><span data-i="heart"></span><span class="lbl">Toeta</span></button>
@@ -100,8 +101,8 @@
         <label class="sf"><span class="k">Kuhu</span><span class="dotto"></span><input id="q" placeholder="Aadress või koht" autocomplete="off" aria-label="Kuhu"><button class="clr" id="qclr" aria-label="Tühjenda" data-i="close"></button></label>
       </div>
       <div class="when" id="sWhen"></div>
-      <div class="plist" id="plist"></div>
       <div id="snote"></div>
+      <div class="plist" id="plist"></div>
     </div>
 
     <div class="view" data-v="settings">
@@ -268,6 +269,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=50eb574c"></script>
+<script type="module" src="app.js?v=e51b1fc4"></script>
 </body>
 </html>
