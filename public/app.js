@@ -1423,7 +1423,12 @@ function followMe(ll){
 }
 function meMarker(){if(!map)return;const el=h('<div class="me" aria-label="Sinu asukoht"></div>');meMk=mk(el,state.me||DEF_LL);el.style.display=state.me?'':'none'}
 const inArea=ll=>ll[0]>24.3&&ll[0]<25.3&&ll[1]>59.25&&ll[1]<59.62;
+// indoors the phone's GPS is often 20-80 m off (at Roosikrantsi 8c it puts you in the school yard next door), so a fix
+// near your saved home (a favourite with the house icon) counts as being at home
+const HOME_R=80;
+function atHome(ll){let b=null,bd=HOME_R;for(const f of FAVS)if(f.ic==='home'&&f.ll){const d=m(f.ll,ll);if(d<bd){bd=d;b=f.ll}}return b?[b[0],b[1]]:ll}
 function setMe(ll,center){
+ if(inArea(ll))ll=atHome(ll);
  if(!inArea(ll)){if(!outside){outside=true;toast(L('Oled Tallinnast väljas. Näitan teid kesklinnast.','You’re outside Tallinn. Showing routes from the city centre.'))}return}
  const first=!state.me;state.me=ll;
  if(meMk){meMk.setLngLat(ll);meMk.getElement().style.display=''}
