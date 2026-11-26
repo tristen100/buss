@@ -1,6 +1,6 @@
 // buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
 import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=a4e6ca5d';
-import { walker } from './walk.js?v=2392f91c';
+import { walker } from './walk.js?v=c9fc6e7b';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
 // guides that tell people to change something on their device speak the device's language (its menus are named in it):
@@ -1273,7 +1273,7 @@ function setSheet(V,instant){
 }
 let drag=null;
 function dStart(e){
- if(isDesk()||e.button>0)return;if(e.target.closest('button,input,a')&&!e.target.closest('#grab'))return;
+ if(isDesk()||e.button>0||e.pointerType==='touch')return;if(e.target.closest('button,input,a')&&!e.target.closest('#grab'))return;
  drag={y:e.clientY,V:state.V,moved:0,t:performance.now(),ly:e.clientY,lt:performance.now(),vy:0};sheet.classList.add('dragging');
  try{e.currentTarget.setPointerCapture(e.pointerId)}catch(x){}
 }
@@ -1300,6 +1300,29 @@ function dEnd(){
  else to=snaps.reduce((a,b)=>Math.abs(b-V)<Math.abs(a-V)?b:a);
  setSheet(to);
 }
+/* touch: the sheet is dragged from anywhere on it, also over buttons and lists. Up while it isn't at full height, down
+   while the list under the finger is at its top (or closes search and Seaded); otherwise the list scrolls as usual, and a
+   sideways swipe or a text field is left alone. A drag never counts as a tap. */
+let tdrag=null,eatClick=0;
+const scrollY_=el=>{for(;el&&el!==sheet.parentElement;el=el.parentElement){if(/(auto|scroll)/.test(getComputedStyle(el).overflowY)&&el.scrollHeight>el.clientHeight+1)return el}return null};
+sheet.addEventListener('touchstart',e=>{
+ tdrag=null;if(isDesk()||e.touches.length>1||e.target.closest('input,textarea,select,[contenteditable]'))return;
+ const t=e.touches[0];tdrag={x:t.clientX,y:t.clientY,sc:scrollY_(e.target),on:false,dead:false};
+},{passive:true});
+sheet.addEventListener('touchmove',e=>{
+ const d=tdrag;if(!d||d.dead)return;const t=e.touches[0],dx=t.clientX-d.x,dy=t.clientY-d.y;
+ if(!d.on){
+  if(Math.abs(dx)<3&&Math.abs(dy)<3)return; // decide on the first move: iPhone ignores a later preventDefault once it scrolls
+  if(Math.abs(dx)>Math.abs(dy)){d.dead=true;return}
+  const take=dy<0?!full()&&state.V<sheetH()-2:!d.sc||d.sc.scrollTop<=0;
+  if(!take){d.dead=true;return}
+  d.on=true;const now=performance.now();drag={y:t.clientY,V:state.V,moved:4,t:now,ly:t.clientY,lt:now,vy:0};sheet.classList.add('dragging');
+ }
+ e.preventDefault();dMove({clientY:t.clientY});
+},{passive:false});
+const tEnd=()=>{const d=tdrag;tdrag=null;if(d&&d.on){eatClick=performance.now();dEnd()}};
+sheet.addEventListener('touchend',tEnd);sheet.addEventListener('touchcancel',tEnd);
+sheet.addEventListener('click',e=>{if(performance.now()-eatClick<450){e.stopPropagation();e.preventDefault()}},true);
 const grab=$('#grab');
 for(const el of [grab,...$$('.shead')])el.addEventListener('pointerdown',dStart);
 addEventListener('pointermove',dMove);addEventListener('pointerup',dEnd);addEventListener('pointercancel',dEnd);

@@ -18,10 +18,11 @@ class Heap {
 const segM = (A, B, kx, ky) => Math.hypot((B[1] - A[1]) * kx, (B[0] - A[0]) * ky);
 
 export class Graph {
-  constructor() { this.adj = new Map(); this.ll = new Map(); this.pen = new Map(); this.te = new Map(); this.geo = new Map(); this.blk = new Map(); this.tiles = new Set(); }
+  constructor() { this.adj = new Map(); this.ll = new Map(); this.pen = new Map(); this.te = new Map(); this.geo = new Map(); this.blk = new Map(); this.fen = new Map(); this.tiles = new Set(); }
   add(key, t) {
     if (this.tiles.has(key)) return; this.tiles.add(key);
     if (t.b) { const s = atob(t.b), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); this.blk.set(key, b); }
+    if (t.f) this.fen.set(key, { l: t.f, h: t.fh || [] });
     for (let i = 0; i < t.n.length; i += 4) { this.ll.set(t.n[i], [t.n[i + 1] / 1e5, t.n[i + 2] / 1e5]); if (t.n[i + 3]) this.pen.set(t.n[i], t.n[i + 3]); }
     const own = [];
     for (let i = 0, j = 0; i < t.e.length; i += 3, j++) {
@@ -48,14 +49,32 @@ export class Graph {
   }
   /* would the straight step from a place to the street cross a building? The place's own building (when it is inside
      one, as an address point often is) and the last 4 m by the street (pavements hug the walls) do not count. */
+  /* does the straight line a→b ([lat, lon]) cross a fence, wall or hedge? Not within 3 m of a gap (gate, path). */
+  overFence(a, b, kx, ky) {
+    const keys = new Set([`${Math.floor(a[0] / TY)}_${Math.floor(a[1] / TX)}`, `${Math.floor(b[0] / TY)}_${Math.floor(b[1] / TX)}`]);
+    const ax = a[1] * kx, ay = a[0] * ky, bx = b[1] * kx, by = b[0] * ky, side = (px, py, qx, qy, rx, ry) => (qx - px) * (ry - py) - (qy - py) * (rx - px);
+    for (const k of keys) { const F = this.fen.get(k); if (!F) continue; const l = F.l;
+      for (let i = 0; i < l.length; i += 4) {
+        const cx = l[i + 1] / 1e5 * kx, cy = l[i] / 1e5 * ky, dx = l[i + 3] / 1e5 * kx, dy = l[i + 2] / 1e5 * ky;
+        const d1 = side(cx, cy, dx, dy, ax, ay), d2 = side(cx, cy, dx, dy, bx, by); if (d1 * d2 >= 0) continue;
+        const d3 = side(ax, ay, bx, by, cx, cy), d4 = side(ax, ay, bx, by, dx, dy); if (d3 * d4 >= 0) continue;
+        const f = d1 / (d1 - d2), xx = ax + f * (bx - ax), yy = ay + f * (by - ay); let gap = false;
+        for (const G of [F, ...[...keys].filter((x) => x !== k).map((x) => this.fen.get(x)).filter(Boolean)])
+          for (let j = 0; j < G.h.length && !gap; j += 2) if (Math.hypot(G.h[j + 1] / 1e5 * kx - xx, G.h[j] / 1e5 * ky - yy) < 3) gap = true;
+        if (!gap) return true;
+      } }
+    return false;
+  }
+  /* The straight step from a place to the street must not go through another building or over a fence, wall or hedge
+     (exact lines; a gate or a path meeting the fence leaves a gap). The place's own building and the last 4 m by the street don't count. */
   hopBlocked([la, lo], [pla, plo], kx, ky) {
     const L = Math.hypot((plo - lo) * kx, (pla - la) * ky), n = Math.ceil(L / 2); let own = true;
     for (let i = 1; i < n; i++) {
       const f = i / n; if (L * (1 - f) < 4) break;
-      const b = this.inside(la + f * (pla - la), lo + f * (plo - lo));
+      const qa = la + f * (pla - la), qo = lo + f * (plo - lo), b = this.inside(qa, qo);
       if (!b) own = false; else if (!own) return true;
     }
-    return false;
+    return this.overFence([la, lo], [pla, plo], kx, ky);
   }
   /* The nearest point on the network to [lon, lat] within `max` m: {a, b, w, t, perp, p} (t = share of the way from a to b, p = [lat, lon]) */
   snap(ll, max = 150) { return this.snaps(ll, max, 1)[0] || null; }
