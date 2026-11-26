@@ -24,6 +24,7 @@ const I={
  close:`<svg viewBox="0 0 24 24" width="18" height="18" ${S}><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`,
  plus:`<svg viewBox="0 0 24 24" ${S}><path d="M12 5v14M5 12h14"/></svg>`,
  gear:`<svg viewBox="0 0 24 24" ${S}><path d="M4 7.5h8.5M17.5 7.5H20M4 16.5h2.5M11.5 16.5H20"/><circle cx="15" cy="7.5" r="2.5"/><circle cx="9" cy="16.5" r="2.5"/></svg>`,
+ user:`<svg viewBox="0 0 24 24" ${S}><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 19.5c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2"/></svg>`,
  home:`<svg viewBox="0 0 24 24" ${S}><path d="M4 11.2 12 4.8l8 6.4"/><path d="M6.5 9.5V19h11V9.5"/><path d="M10.2 19v-4.6h3.6V19"/></svg>`,
  work:`<svg viewBox="0 0 24 24" ${S}><rect x="3.8" y="7.8" width="16.4" height="11.4" rx="2.6"/><path d="M9 7.8V6.3c0-.8.7-1.5 1.5-1.5h3c.8 0 1.5.7 1.5 1.5v1.5M3.8 13h16.4"/></svg>`,
  star:`<svg viewBox="0 0 24 24" ${S}><path d="m12 4.6 2.3 4.6 5.1.8-3.7 3.6.9 5.1L12 16.3l-4.6 2.4.9-5.1-3.7-3.6 5.1-.8z"/></svg>`,
@@ -73,7 +74,10 @@ function prep(p){const c=[0];for(let i=1;i<p.length;i++)c.push(c[i-1]+m(p[i-1],p
 function at(Q,d){d=Math.max(0,Math.min(Q.L,d));let lo=0,hi=Q.c.length-1;while(hi-lo>1){const mid=(lo+hi)>>1;if(Q.c[mid]<=d)lo=mid;else hi=mid}const a=Q.p[lo],b=Q.p[hi],s=(Q.c[hi]-Q.c[lo])||1,t=(d-Q.c[lo])/s;return{ll:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],brg:Math.atan2((b[0]-a[0])*KX,(b[1]-a[1])*KY)*180/Math.PI}}
 function sub(Q,d0,d1){const o=[at(Q,d0).ll];for(let i=0;i<Q.p.length;i++)if(Q.c[i]>d0&&Q.c[i]<d1)o.push(Q.p[i]);o.push(at(Q,d1).ll);return o}
 function nearD(Q,ll){let b=1e9,d=0;for(let i=0;i<Q.p.length;i++){const x=m(Q.p[i],ll);if(x<b){b=x;d=Q.c[i]}}return d}
-const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+// what a Konto keeps (favourites, recent places, speeds and switches, look); a change to any of them is sent to the account
+const SYNCK=new Set(['buss-favs','buss-recent','buss-pace','buss-run','buss-reg','buss-theme','buss-glass']);
+let acctDirty=null;
+const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}if(acctDirty&&SYNCK.has(k))acctDirty()},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ================= clock, timetable, live ================= */
@@ -906,13 +910,92 @@ function setTheme(p){
 }
 addEventListener('keydown',e=>{if(e.key==='/'&&state.view!=='search'&&document.activeElement.tagName!=='INPUT'){e.preventDefault();go('search')}});
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{setSheet(snapFor(state.view),true);lens(true)},120)});
+/* ================= Konto: one word or password, same favourites and settings on every device =================
+   The word never leaves the phone. PBKDF2 (600 000 rounds) turns it into an id that finds the row and a separate AES key
+   that encrypts it; the server keeps sha256(id) and the ciphertext only, and limits guesses per network. */
+const ACCT_SALT='buss.veebi.dev/konto/v1',ACCT_ITER=600000,ACCT_MIN=8;
+let ACCT=(()=>{try{const a=JSON.parse(LS.get('buss-acct'));return a&&/^[a-f0-9]{64}$/.test(a.id)&&/^[a-f0-9]{64}$/.test(a.key)?a:null}catch(e){return null}})();
+let accUI={st:ACCT?'in':'out'},applying=0,acctT=0;
+const saveAcct=()=>ACCT?LS.set('buss-acct',JSON.stringify(ACCT)):LS.del('buss-acct');
+const hx=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''),unhx=t=>new Uint8Array(t.match(/../g).map(x=>parseInt(x,16)));
+const b64=u=>{let t='';for(let i=0;i<u.length;i+=8192)t+=String.fromCharCode(...u.subarray(i,i+8192));return btoa(t)},unb64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function acctDerive(word){
+ const e=new TextEncoder(),base=await crypto.subtle.importKey('raw',e.encode(word.normalize('NFKC')),'PBKDF2',false,['deriveBits']);
+ const b=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:e.encode(ACCT_SALT),iterations:ACCT_ITER},base,512));
+ return{id:hx(b.slice(0,32)),key:hx(b.slice(32))};
+}
+const aesKey=a=>crypto.subtle.importKey('raw',unhx(a.key),'AES-GCM',false,['encrypt','decrypt']);
+async function seal(a,obj){const e=new TextEncoder(),iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:e.encode(a.id)},await aesKey(a),e.encode(JSON.stringify(obj))));const o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
+async function unseal(a,t){const u=unb64(t),pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12),additionalData:new TextEncoder().encode(a.id)},await aesKey(a),u.slice(12));return JSON.parse(new TextDecoder().decode(pt))}
+async function vault(op,a,extra){const r=await fetch('/api/vault',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op,id:a.id,...extra})});if(r.status===429)throw new Error('slow');if(!r.ok)throw new Error('net');return r.json()}
+function acctSnap(){const o={};for(const k of SYNCK){const v=LS.get(k);if(v!=null)o[k]=v}return o}
+// put an account's data on this device; on sign-in (merge) the favourites and recent places already here are kept too
+function acctApply(d,merge){
+ const mine=merge?FAVS.slice():[],mineR=merge?RECENT.slice():[];
+ applying=1;for(const k of SYNCK)if(typeof d[k]==='string')LS.set(k,d[k]);applying=0;
+ FAVS.splice(0,FAVS.length,...loadJ('buss-favs',[]));RECENT.splice(0,RECENT.length,...loadJ('buss-recent',[]));
+ const same=(x,y)=>x.ll&&y.ll&&m(x.ll,y.ll)<30;let add=0;
+ for(const f of mine)if(!FAVS.some(g=>same(f,g)||(['home','work','school'].includes(f.ic)&&f.ic===g.ic))){FAVS.push(f);add=1}
+ for(const p of mineR)if(RECENT.length<8&&!RECENT.some(q=>same(p,q))){RECENT.push(p);add=1}
+ try{const x=JSON.parse(LS.get('buss-pace'));if(x&&x.jog&&x.run)state.pace={...state.pace,...x}}catch(e){}
+ state.run=LS.get('buss-run')==='1';syncRun();state.regTown=LS.get('buss-reg')==='1';
+ applying=1;const t=LS.get('buss-theme');setTheme(['light','dark'].includes(t)?t:'auto');const g=LS.get('buss-glass');if(g!=null)setGlass(g!=='0');applying=0;
+ renderFavPins();if(state.view==='home')renderHome();if(state.view==='settings')renderSettings();
+ if(add){saveFavs();saveRecent()}
+}
+acctDirty=()=>{if(!ACCT||applying)return;if(!ACCT.dirty){ACCT.dirty=1;saveAcct()}clearTimeout(acctT);acctT=setTimeout(acctPush,1200)};
+async function acctPush(){
+ if(!ACCT)return;const a=ACCT,at=Date.now();
+ try{await vault('put',a,{data:await seal(a,acctSnap()),at});if(ACCT===a){a.at=at;a.dirty=0;saveAcct();if(state.view==='settings')renderAcct()}}catch(e){/* tried again on the next change or when the app comes back */}
+}
+async function acctPull(){
+ if(!ACCT)return;const a=ACCT;
+ try{if(a.dirty){await acctPush();return}const r=await vault('get',a);if(ACCT!==a)return;
+  if(r.none){acctPush();return}
+  if(r.at>(a.at||0)){const d=await unseal(a,r.data);a.at=r.at;saveAcct();acctApply(d);if(state.view==='settings')renderAcct()}}catch(e){}
+}
+async function acctOpen(word){
+ accUI={st:'busy'};renderAcct();
+ try{const a=await acctDerive(word),r=await vault('get',a);
+  if(r.none){accUI={st:'new',a};renderAcct();return}
+  const d=await unseal(a,r.data);ACCT={...a,at:r.at,dirty:0};saveAcct();acctApply(d,true);accUI={st:'in'};renderAcct();
+  toast('Konto avatud: lemmikud ja seaded on nüüd siin')
+ }catch(e){accUI={st:'out',err:e.message==='slow'?'Liiga palju katseid sellest võrgust. Proovi mõne minuti pärast.':e.message==='net'||e.name==='TypeError'?'Ühendus ei õnnestunud. Proovi uuesti.':'Kontot ei saanud avada.'};renderAcct()}
+}
+function acctOut(){
+ ACCT=null;saveAcct();clearTimeout(acctT);
+ FAVS.length=0;RECENT.length=0;applying=1;saveFavs();saveRecent();applying=0;renderFavPins();
+ accUI={st:'out'};renderAcct();renderSettings();toast('Välja logitud. Lemmikud jäid kontole, sellest seadmest eemaldati.')
+}
+function renderAcct(){
+ const box=$('#accBox');if(!box)return;const U=accUI;let h;
+ if(ACCT&&U.st!=='del')h=`<div class="accin"><span class="ico" data-k>${I.user}</span><div class="pt"><b>Konto on sees</b><small>${ACCT.dirty?'Salvestan…':ACCT.at?'Salvestatud '+new Date(ACCT.at).toLocaleString('et-EE',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'Salvestan…'}</small></div></div>
+  <div class="accbtns"><button class="btn sec" id="accOut">Logi välja</button><button class="btn sec warn" id="accDel">Kustuta konto</button></div>`;
+ else if(U.st==='del')h=`<p class="accq">Kustutan konto andmed serverist? Selles seadmes jäävad lemmikud alles.</p><div class="accbtns"><button class="btn sec" id="accNo">Tühista</button><button class="btn sec warn" id="accYes">Kustuta</button></div>`;
+ else if(U.st==='new')h=`<p class="accq">Selle sõnaga kontot veel pole. Loon uue? Lemmikud ja seaded sellest seadmest lähevad kontole.</p><div class="accbtns"><button class="btn sec" id="accNo">Tühista</button><button class="btn pri" id="accNew">Loo konto</button></div>`;
+ else h=`<form class="accf" id="accF" autocomplete="on"><input type="text" name="username" autocomplete="username" value="buss.veebi.dev" hidden readonly>
+  <label class="sf"><input id="accW" type="password" name="password" autocomplete="current-password" placeholder="Sõna või salasõna" aria-label="Sõna või salasõna" ${U.st==='busy'?'disabled':''}><button type="button" class="accshow" id="accShow">Näita</button></label>
+  <button class="btn pri" id="accGo" ${U.st==='busy'?'disabled':''}>${U.st==='busy'?'Avan…':'Ava konto'}</button>
+  ${U.err?`<p class="accerr">${esc(U.err)}</p>`:''}</form>`;
+ box.innerHTML=h;
+ const on=(id,f)=>{const b=$('#'+id);if(b)b.onclick=f};
+ on('accOut',acctOut);on('accDel',()=>{accUI={st:'del'};renderAcct()});on('accNo',()=>{accUI={st:ACCT?'in':'out'};renderAcct()});
+ on('accYes',async()=>{const a=ACCT;try{await vault('del',a)}catch(e){toast('Ei õnnestunud. Proovi uuesti.');return}ACCT=null;saveAcct();accUI={st:'out'};renderAcct();toast('Konto andmed kustutatud')});
+ on('accNew',async()=>{const a=U.a;ACCT={...a,at:0,dirty:1};saveAcct();accUI={st:'in'};renderAcct();await acctPush();toast('Konto loodud')});
+ on('accShow',()=>{const w=$('#accW');w.type=w.type==='password'?'text':'password';$('#accShow').textContent=w.type==='password'?'Näita':'Peida'});
+ const f=$('#accF');if(f)f.onsubmit=e=>{e.preventDefault();const w=$('#accW').value.trim();
+  if(w.length<ACCT_MIN){accUI={st:'out',err:`Vähemalt ${ACCT_MIN} märki. Pikemat sõna on raskem ära arvata.`};renderAcct();$('#accW').value=w;$('#accW').focus();return}
+  acctOpen(w)};
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)acctPull()});
+
 /* ================= settings ================= */
 function openSettings(){if(state.view!=='settings')go('settings')}
 function closeSettings(){go(state.back&&state.back!=='settings'?state.back:'home',{keepCam:true});$('#openSet').focus({preventScroll:true})}
 $('#openSet').onclick=()=>state.view==='settings'?closeSettings():openSettings();
 $('#setBack').onclick=closeSettings;
 addEventListener('keydown',e=>{if(e.key==='Escape'&&state.view==='settings'&&!e.defaultPrevented){if(!$('#favAddBox').hidden){openFavAdd(false);$('#favAdd').focus();return}closeSettings()}});
-function renderSettings(){openFavAdd(false,true);renderFavs();renderPace();syncSeg();$('#glassTog').setAttribute('aria-checked',state.glass);$('#regTog').setAttribute('aria-checked',state.regTown)}
+function renderSettings(){renderAcct();openFavAdd(false,true);renderFavs();renderPace();syncSeg();$('#glassTog').setAttribute('aria-checked',state.glass);$('#regTog').setAttribute('aria-checked',state.regTown)}
 
 /* favourites: tap a row to rename or change its icon, drag the handle to reorder, delete with undo */
 const ICN={home:'Kodu',work:'Töö',school:'Kool',gym:'Trenn',shop:'Pood',fam:'Pere',star:'Täht',pin:'Koht'};
@@ -1636,6 +1719,7 @@ $('#appInst').hidden=standalone();
 /* ================= start ================= */
 state.run=LS.get('buss-run')==='1';
 renderHome();setSheet(snapFor('home'),true);lens();syncRun();
+acctPull();
 loadData().then(()=>{loadNotes();if(ALARM)tickAlarm();renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));

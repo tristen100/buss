@@ -686,3 +686,22 @@ body.picking #map canvas{cursor:crosshair}
 .sswap{flex:none;width:40px;height:40px;margin-right:-4px;border-radius:50%;display:grid;place-items:center;color:var(--text-2)}
 .sswap:hover{background:var(--well)}
 .sswap:active{transform:scale(.94)}
+
+/* Konto */
+.acc{padding:10px}
+.accf{display:grid;gap:8px}
+.acc .sf{background:var(--well-2);border-radius:var(--r-btn);height:48px;padding:0 6px 0 14px}
+.acc .sf input{font-size:16px}
+.accshow{height:36px;padding:0 10px;border-radius:10px;font-size:13px;font-weight:600;color:var(--text-2)}
+.accerr{margin:2px 4px 0;font-size:13px;color:var(--late,#e5484d)}
+.accq{margin:4px 4px 10px;font-size:14px;line-height:1.45}
+.accin{display:flex;align-items:center;gap:12px;padding:4px 4px 10px}
+.accin .ico{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--well-2);color:var(--bus);flex:none}
+.accin .ico svg{width:18px;height:18px}
+.accin .pt{display:grid}
+.accin small{color:var(--text-2);font-size:13px}
+.accbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.accbtns .btn{width:100%}
+.btn.sec{background:var(--well-2);color:var(--text)}
+.btn.sec.warn{color:var(--late,#e5484d)}
+.btn:disabled{opacity:.6}

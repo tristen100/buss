@@ -1,6 +1,7 @@
 // buss.veebi.dev Worker: static files, plus /api/gps and /api/notices (Tallinn's vehicle positions and disruption
 // notices have no CORS, so we pass them on), plus /api/push/* and a cron for the "Mine 5 min pärast" push (push.js).
 import { pushApi, pushCron } from "./push.js";
+import { vaultApi, vaultCron } from "./vault.js";
 let last = { at: 0, body: "" };
 let notes = { at: 0, body: "" };
 
@@ -29,6 +30,7 @@ export default {
       return new Response(notes.body || "[]", { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=120", "access-control-allow-origin": "*" } });
     }
     if (url.pathname.startsWith("/api/push/")) return pushApi(req, env, url);
+    if (url.pathname === "/api/vault") return vaultApi(req, env, url);
     const res = await env.ASSETS.fetch(req);
     if (url.pathname.startsWith("/data/")) {
       const h = new Headers(res.headers); h.set("cache-control", "public, max-age=3600");
@@ -38,5 +40,6 @@ export default {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(pushCron(env));
+    if (new Date().getUTCMinutes() === 7) ctx.waitUntil(vaultCron(env));
   },
 };
