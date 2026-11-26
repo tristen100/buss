@@ -757,7 +757,7 @@ function locHelp(){
 function meRow(){
  const sub=state.me?'Praegune asukoht':LOCST==='denied'?L('Asukoha luba on keelatud','Location is blocked for this site'):L('Puuduta, et lubada asukoht','Tap to allow location');
  return `<div class="prow"><button class="place${!state.from&&state.me?' on':''}" data-me="1"><span class="pi fv">${I.locate}</span><span class="pn"><b>Sinu asukoht</b><small>${sub}</small></span></button></div>`
-  +(LOCST==='denied'&&!state.me?`<div class="note lochelp">${esc(locHelp())}</div>`:'');
+  +(LOCST==='denied'&&!state.me?(iosApp()?`<div class="note lochelp"><button class="lnk" data-lochelp>${L('Kuidas asukoht sisse lülitada','How to turn location on')}</button></div>`:`<div class="note lochelp">${esc(locHelp())}</div>`):'');
 }
 function setFrom(p){
  state.from=p;$('#fromIn').value=fromVal();$('#ftFrom').textContent=fromName();
@@ -1354,7 +1354,17 @@ function setMe(ll,center){
 /* location. A tap always really asks (iPhone only shows its prompt again on a tap). A "denied" answer is believed only
    when the browser's permission state says denied too: iPhone also answers "denied" for a moment after waking, after a
    dismissed prompt, or with location set to "Ask", so then we try once more and keep asking later. */
-async function permState(){try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});return p?p.state:null}catch(e){return null}}
+// iPhone Home Screen app: iOS keeps its location permission apart from Safari's, and its permission state is not to be
+// trusted (it says "denied" while location works), so there only a real request counts
+const iosApp=()=>isIOS&&standalone();
+async function permState(){if(iosApp())return null;try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});return p?p.state:null}catch(e){return null}}
+function appLocHelp(){
+ $('#locT').textContent=L('Asukoht on avaekraani äpis keelatud','Location is blocked for the Home Screen app');
+ $('#locP').textContent=L('iPhone hoiab avaekraani äpi asukohaloa Safarist eraldi. Safaris töötab, aga see äpp vajab oma luba.','iPhone keeps the Home Screen app’s location permission separate from Safari’s. It works in Safari, but this app needs its own.');
+ $('#locSteps').innerHTML=(L(['Kustuta buss avaekraanilt (hoia ikooni all → „Eemalda äpp“).','Ava buss.veebi.dev Safaris ja lisa uuesti avaekraanile.','Ava äpp, puuduta asukohanuppu ja vali „Luba“.','Kui ikka ei tööta: Seaded → Üldine → Teisalda või lähtesta iPhone → Lähtesta → „Lähtesta asukoht ja privaatsus“. Siis küsivad kõik äpid luba uuesti.'],
+  ['Delete buss from the Home Screen (touch and hold the icon → “Remove App”).','Open buss.veebi.dev in Safari and add it to the Home Screen again.','Open the app, tap the location button and choose “Allow”.','If it still doesn’t work: Settings → General → Transfer or Reset iPhone → Reset → “Reset Location & Privacy”. All apps will then ask for permission again.'])).map(t=>`<li>${esc(t)}</li>`).join('');
+ openDlg('#locDlg');
+}
 function sysHelp(){
  return isIOS?L('Kontrolli: Seaded → Privaatsus ja turvalisus → Asukohateenused on sees ja Safari veebisaidid → „Rakenduse kasutamise ajal“.','Check: Settings → Privacy & Security → Location Services is on, and Safari Websites → “While Using the App”.')
   :isAndroid?L('Kontrolli, et telefoni asukoht on sisse lülitatud (kiirseadetes).','Check that Location is turned on in the phone’s quick settings.')
@@ -1365,6 +1375,7 @@ function locate(ask,cb,again){
  navigator.geolocation.getCurrentPosition(p=>{LOCST='granted';setMe([p.coords.longitude,p.coords.latitude],ask&&!cb);watch();cb&&cb(!!state.me)},async e=>{
   const ps=e.code===1?await permState():null;
   if(e.code===1&&ps!=='denied'&&!again){setTimeout(()=>locate(ask,cb,1),500);return}
+  if(e.code===1&&iosApp()&&again){LOCST='denied';LS.set('buss-loc','0');if(state.view==='search')renderPlaces();if(state.view==='home')renderHome();if(ask)appLocHelp();cb&&cb(false);return}
   if(e.code===1&&ps==='denied'){LOCST='denied';LS.set('buss-loc','0');if(state.view==='search')renderPlaces();if(state.view==='home')renderHome()}
   if(ask)toast(e.code!==1?L('Asukohta ei leitud. Proovi uuesti.','Couldn’t find your location. Try again.')
    :ps==='denied'?L('Asukoha luba on keelatud. ','Location is blocked for this site. ')+locHelp()
@@ -1481,6 +1492,8 @@ function openInstall(auto){
 $('#instOk').onclick=async()=>{if(BIP){const e=BIP;BIP=null;e.prompt();try{await e.userChoice}catch(x){}}closeDlg('#inst')};
 $('#instNo').onclick=()=>{LS.set('buss-inst-at',String(Date.now()));closeDlg('#inst')};
 $('#instX').onclick=()=>closeDlg('#inst');
+$('#locX').onclick=$('#locOk').onclick=()=>closeDlg('#locDlg');
+document.addEventListener('click',e=>{if(e.target.closest('[data-lochelp]'))appLocHelp()});
 let instDone=false;
 function maybeInstall(){
  if(instDone||standalone()||LS.get('buss-tut')!=='1'||$('.dlg.open')||SV||$('#tut').classList.contains('on'))return;
@@ -1538,7 +1551,7 @@ loadData().then(()=>{loadNotes();if(ALARM)tickAlarm();renderHome();if(state.to)g
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
 /* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */
-(async()=>{let st='prompt';try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
+(async()=>{let st='prompt';if(iosApp()){if(LS.get('buss-loc')==='1')locate(false);return}try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
  if(st==='granted')locate(false);else if(st==='prompt'&&LS.get('buss-tut')==='1')setTimeout(()=>locate(false),700)})();
 ping('open');
 if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
