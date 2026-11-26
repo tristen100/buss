@@ -1393,6 +1393,12 @@ $('#ftBack').onclick=()=>go(state.view==='route'?'results':'home');
 $('#rBack').onclick=()=>go('results');
 document.addEventListener('click',e=>{if(e.target.closest('[data-now]')){e.stopPropagation();toNow()}});
 $('#ftSwap').onclick=swap;
+// swap in search: turns the two fields around, also when one is still empty
+$('#sSwap').onclick=e=>{e.preventDefault();
+ if(state.to&&hasFrom()){swap();return}
+ if(state.to){state.from=state.to;state.to=null;$('#snote').innerHTML='';go('search',{noFocus:!isDesk()});$('#q').value='';return}
+ if(state.from){state.to=state.from;state.from=null;$('#ftTo').textContent=state.to.n;state.sel=null;freshLive();go('results',{fresh:true})}
+};
 $('#ftFrom').parentNode.onclick=()=>go('search',{field:'from'});
 $('#ftTo').parentNode.onclick=()=>go('search',{field:'to'});
 $('#fromIn').addEventListener('focus',()=>{if(FIELD!=='from'){FIELD='from';renderPlaces()}$('#fromIn').select()});

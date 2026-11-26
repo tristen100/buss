@@ -177,7 +177,8 @@ body[data-view=home] .view[data-v=home],body[data-view=search] .view[data-v=sear
 .attr a{color:inherit}
 
 /* search */
-.sfields{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:4px 0 6px;border-radius:20px;background:var(--well);padding:4px 6px}
+.sfrow{display:flex;align-items:center;gap:6px;margin:4px 0 6px}
+.sfields{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0;border-radius:20px;background:var(--well);padding:4px 6px}
 .sf{display:flex;align-items:center;gap:12px;height:50px;padding:0 10px}
 .sfields .sf{min-width:0;padding-right:4px}
 .sf+.sf{border-top:1px solid var(--line)}
@@ -682,3 +683,6 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 .pbx{height:36px;padding:0 14px;border-radius:var(--pill);background:var(--well-2);font-weight:600;flex:none}
 body.picking #map canvas{cursor:crosshair}
 .sfields .sf input:placeholder-shown+.clr{visibility:hidden}
+.sswap{flex:none;width:40px;height:40px;margin-right:-4px;border-radius:50%;display:grid;place-items:center;color:var(--text-2)}
+.sswap:hover{background:var(--well)}
+.sswap:active{transform:scale(.94)}
