@@ -3,6 +3,11 @@ import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=a4e6ca5d';
 import { walker } from './walk.js?v=2392f91c';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
+// guides that tell people to change something on their device speak the device's language (its menus are named in it):
+// Estonian only on an Estonian device, else English
+const EN=!/^et\b/i.test((navigator.languages&&navigator.languages[0])||navigator.language||'');
+const L=(et,en)=>EN?en:et;
+let FOLLOW=true,camAt=null,nearAt=null,resAt=null; // map follows you: see followMe
 /* ================= icons ================= */
 const S='fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const I={
@@ -233,6 +238,7 @@ async function initMap(){
  map.touchZoomRotate.disableRotation();
  if(isDesk())map.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
  map.on('error',e=>{console.warn('map',e&&e.error&&e.error.message)});
+ map.on('dragstart',e=>{if(e.originalEvent)setFollow(false)});
  map.on('load',()=>{
   firstSym=(map.getStyle().layers.find(l=>l.type==='symbol')||{}).id;
   addLayers();addVehLayers();meMarker();renderFavPins();
@@ -744,12 +750,12 @@ function renderPlaces(){
 /* the "Kust" field: your location (asks for it when needed) or any place */
 let FIELD='to',LOCST='prompt';
 function locHelp(){
- return isIOS?'iPhone: Seaded → Privaatsus ja turvalisus → Asukohateenused → Safari veebisaidid → „Rakenduse kasutamise ajal“. Siis ava leht uuesti.'
-  :isAndroid?'Puuduta aadressiriba ees olevat ikooni → Load → Asukoht → Luba. Siis ava leht uuesti.'
-  :'Klõpsa aadressiriba ees oleval ikoonil, luba asukoht ja laadi leht uuesti.';
+ return isIOS?L('iPhone: Seaded → Privaatsus ja turvalisus → Asukohateenused → Safari veebisaidid → „Rakenduse kasutamise ajal“. Siis ava leht uuesti.','iPhone: Settings → Privacy & Security → Location Services → Safari Websites → “While Using the App”. Then open the page again.')
+  :isAndroid?L('Puuduta aadressiriba ees olevat ikooni → Load → Asukoht → Luba. Siis ava leht uuesti.','Tap the icon left of the address bar → Permissions → Location → Allow. Then open the page again.')
+  :L('Klõpsa aadressiriba ees oleval ikoonil, luba asukoht ja laadi leht uuesti.','Click the icon left of the address bar, allow location and reload the page.');
 }
 function meRow(){
- const sub=state.me?'Praegune asukoht':LOCST==='denied'?'Asukoha luba on keelatud':'Puuduta, et lubada asukoht';
+ const sub=state.me?'Praegune asukoht':LOCST==='denied'?L('Asukoha luba on keelatud','Location is blocked for this site'):L('Puuduta, et lubada asukoht','Tap to allow location');
  return `<div class="prow"><button class="place${!state.from&&state.me?' on':''}" data-me="1"><span class="pi fv">${I.locate}</span><span class="pn"><b>Sinu asukoht</b><small>${sub}</small></span></button></div>`
   +(LOCST==='denied'&&!state.me?`<div class="note lochelp">${esc(locHelp())}</div>`:'');
 }
@@ -760,7 +766,6 @@ function setFrom(p){
 }
 function pickMe(){
  if(state.me){setFrom(null);return}
- if(LOCST==='denied'){renderPlaces();return}
  $('#fromIn').value='Otsin asukohta…';
  locate(true,ok=>{if(ok)setFrom(null);else{$('#fromIn').value=fromVal();renderPlaces()}});
 }
@@ -827,7 +832,7 @@ $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('o
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
-let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||2200)}
+let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');
 const resolveT=p=>p==='auto'?(mqDark.matches?'dark':'light'):p;
 function syncSeg(){
@@ -1111,8 +1116,13 @@ function setAlarm(R){
  const ask=window.Notification&&Notification.permission==='default'?Notification.requestPermission():Promise.resolve();
  ask.catch(()=>{}).then(()=>Promise.race([pushAlarm(),new Promise(r=>setTimeout(()=>r(false),8000))])).then(ok=>{const left=alarmLeave()-LEAD-alarmNow();
   const ios=/iP(hone|ad|od)/.test(navigator.userAgent)&&!standalone();
-  toast(left<=0?'Mine kohe!':`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut.`+(ok?'':ios?' Lukus telefonile teavituse saamiseks lisa äpp avaekraanile. Praegu hoia äpp lahti.':' Hoia äpp lahti.'));
+  toast(left<=0?'Mine kohe!':`Teavitan kell ${hm(alarmLeave()-LEAD)}, 5 min enne minekut.`+(ok?'':window.Notification&&Notification.permission==='denied'?' '+notifHelp():ios?' '+L('Lukus telefonile teavituse saamiseks lisa äpp avaekraanile. Praegu hoia äpp lahti.','To get it on a locked iPhone, add the app to your Home Screen. For now, keep the app open.'):' '+L('Hoia äpp lahti.','Keep the app open.')));
   tickAlarm();if(state.view==='route')renderRoute()});
+}
+function notifHelp(){
+ return isIOS?L('Teavitused on keelatud: Seaded → Teavitused → buss → „Luba teavitused“.','Notifications are off: Settings → Notifications → buss → “Allow Notifications”.')
+  :isAndroid?L('Teavitused on keelatud: puuduta aadressiriba ees olevat ikooni → Load → Teavitused → Luba.','Notifications are blocked: tap the icon left of the address bar → Permissions → Notifications → Allow.')
+  :L('Teavitused on keelatud: klõpsa aadressiriba ees oleval ikoonil ja luba teavitused.','Notifications are blocked: click the icon left of the address bar and allow notifications.');
 }
 // the trip's rides, so transfers can be watched on the way: stop indexes, scheduled times, walk minutes before each
 function alarmRides(R){
@@ -1199,7 +1209,7 @@ function applyResultsWhen(){$('#rWhen')&&($('#rWhen').hidden=true);state.sel=nul
 
 /* ================= navigation ================= */
 function go(v,o={}){
- if(v==='results'&&o.fresh)state.t0=null;
+ if(v==='results'&&o.fresh){state.t0=null;resAt=state.me}camAt=state.me;
  const prevV=state.view;state.view=v;document.body.dataset.view=v;state.prev=null;if(prevV!==v)sbody.scrollTop=0;
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
@@ -1316,27 +1326,55 @@ $('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces()});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
 $('#fclr').onclick=e=>{e.preventDefault();$('#fromIn').value='';FIELD='from';renderPlaces();$('#fromIn').focus()};
 $('#qclr').onclick=e=>{e.preventDefault();$('#q').value='';renderPlaces();$('#q').focus()};
-$('#locate').onclick=()=>{if(state.me&&map)map.easeTo({center:state.me,zoom:16,padding:pad(),duration:RM?0:700});else locate(true)};
+$('#locate').onclick=()=>{setFollow(true);if(state.me&&map)map.easeTo({center:state.me,zoom:Math.max(map.getZoom(),16),padding:pad(),duration:RM?0:700});else locate(true)};
 
 /* ================= your location ================= */
 let meMk=null,watchId=null,outside=false;
+/* the map moves with you (home and route views) until you drag it; the locate button turns it back on */
+function setFollow(on){FOLLOW=on;$('#locate').classList.toggle('on',on&&!!state.me)}
+function followMe(ll){
+ if(!map||!FOLLOW||!(state.view==='home'||state.view==='route'))return;
+ if(camAt&&m(camAt,ll)<25)return;camAt=ll;
+ map.easeTo({center:ll,padding:pad(),duration:RM?0:800});
+}
 function meMarker(){if(!map)return;const el=h('<div class="me" aria-label="Sinu asukoht"></div>');meMk=mk(el,state.me||DEF_LL);el.style.display=state.me?'':'none'}
 const inArea=ll=>ll[0]>24.3&&ll[0]<25.3&&ll[1]>59.25&&ll[1]<59.62;
 function setMe(ll,center){
- if(!inArea(ll)){if(!outside){outside=true;toast('Oled Tallinnast väljas. Näitan teid kesklinnast.')}return}
+ if(!inArea(ll)){if(!outside){outside=true;toast(L('Oled Tallinnast väljas. Näitan teid kesklinnast.','You’re outside Tallinn. Showing routes from the city centre.'))}return}
  const first=!state.me;state.me=ll;
  if(meMk){meMk.setLngLat(ll);meMk.getElement().style.display=''}
  if(first){LS.set('buss-loc','1');if(state.view==='results'&&!state.from&&state.to)go('results',{fresh:true});if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
- if(center&&map)map.easeTo({center:ll,zoom:16,padding:pad(),duration:RM?0:700});
+ if(center&&map){camAt=ll;map.easeTo({center:ll,zoom:16,padding:pad(),duration:RM?0:700})}
+ if(first){camAt=ll;nearAt=ll;resAt=ll;setFollow(FOLLOW);return}
+ followMe(ll);
+ // moved on: nearby stops now, and routes from "your location" from the new spot (the leave time stays)
+ if(state.view==='home'&&(!nearAt||m(nearAt,ll)>100)){nearAt=ll;loadNear()}
+ if(state.view==='results'&&!state.from&&state.to&&(!resAt||m(resAt,ll)>200)){resAt=ll;compute({})}
 }
-function locate(ask,cb){
- if(!navigator.geolocation){if(ask)toast('See brauser ei anna asukohta');cb&&cb(false);return}
- if(ask&&LOCST==='denied'){toast('Asukoha luba on keelatud. '+locHelp(),9000);cb&&cb(false);return}
- navigator.geolocation.getCurrentPosition(p=>{LOCST='granted';setMe([p.coords.longitude,p.coords.latitude],ask&&!cb);watch();cb&&cb(!!state.me)},e=>{
-  if(e.code===1){LOCST='denied';LS.set('buss-loc','0');if(state.view==='search')renderPlaces();if(state.view==='home')renderHome()}
-  if(ask)toast(e.code===1?'Asukoha luba on keelatud. '+locHelp():'Asukohta ei leitud. Proovi uuesti.',e.code===1?9000:undefined);cb&&cb(false)},{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+/* location. A tap always really asks (iPhone only shows its prompt again on a tap). A "denied" answer is believed only
+   when the browser's permission state says denied too: iPhone also answers "denied" for a moment after waking, after a
+   dismissed prompt, or with location set to "Ask", so then we try once more and keep asking later. */
+async function permState(){try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});return p?p.state:null}catch(e){return null}}
+function sysHelp(){
+ return isIOS?L('Kontrolli: Seaded → Privaatsus ja turvalisus → Asukohateenused on sees ja Safari veebisaidid → „Rakenduse kasutamise ajal“.','Check: Settings → Privacy & Security → Location Services is on, and Safari Websites → “While Using the App”.')
+  :isAndroid?L('Kontrolli, et telefoni asukoht on sisse lülitatud (kiirseadetes).','Check that Location is turned on in the phone’s quick settings.')
+  :L('Kontrolli, et arvuti asukohateenused on brauseri jaoks sisse lülitatud.','Check that the computer’s location services are on for this browser.');
 }
-function watch(){if(watchId==null&&navigator.geolocation)watchId=navigator.geolocation.watchPosition(p=>setMe([p.coords.longitude,p.coords.latitude]),()=>{},{enableHighAccuracy:true,maximumAge:15000})}
+function locate(ask,cb,again){
+ if(!navigator.geolocation){if(ask)toast(L('See brauser ei anna asukohta','This browser can’t share your location'));cb&&cb(false);return}
+ navigator.geolocation.getCurrentPosition(p=>{LOCST='granted';setMe([p.coords.longitude,p.coords.latitude],ask&&!cb);watch();cb&&cb(!!state.me)},async e=>{
+  const ps=e.code===1?await permState():null;
+  if(e.code===1&&ps!=='denied'&&!again){setTimeout(()=>locate(ask,cb,1),500);return}
+  if(e.code===1&&ps==='denied'){LOCST='denied';LS.set('buss-loc','0');if(state.view==='search')renderPlaces();if(state.view==='home')renderHome()}
+  if(ask)toast(e.code!==1?L('Asukohta ei leitud. Proovi uuesti.','Couldn’t find your location. Try again.')
+   :ps==='denied'?L('Asukoha luba on keelatud. ','Location is blocked for this site. ')+locHelp()
+   :ps==='granted'?L('Brauser lubab asukoha, aga seade ei andnud seda. ','The browser allows location, but the device didn’t give it. ')+sysHelp()
+   :L('Asukohta ei saanud. Puuduta uuesti ja vali „Luba“.','Couldn’t get your location. Tap again and choose “Allow”.'),e.code===1?9000:undefined);
+  cb&&cb(false)},again?{enableHighAccuracy:false,timeout:15000,maximumAge:120000}:{enableHighAccuracy:true,timeout:12000,maximumAge:30000});
+}
+function watch(){if(watchId==null&&navigator.geolocation)watchId=navigator.geolocation.watchPosition(p=>{LOCST='granted';setMe([p.coords.longitude,p.coords.latitude])},e=>{if(e.code===1){navigator.geolocation.clearWatch(watchId);watchId=null}},{enableHighAccuracy:true,maximumAge:15000})}
+// back in the app (iPhone stops location while it is in the background): pick it up again quietly
+document.addEventListener('visibilitychange',()=>{if(document.hidden||!navigator.geolocation)return;if(state.me){watch();return}permState().then(ps=>{if(ps&&ps!==LOCST){LOCST=ps;if(state.view==='search')renderPlaces()}if(ps==='granted'||(ps==null&&LS.get('buss-loc')==='1'))locate(false)})});
 
 /* ================= favourites in settings: search with the same address search ================= */
 let fT=0;
@@ -1412,30 +1450,31 @@ function installSteps(){
  const sh=`<span class="ki">${I.share}</span>`,dots='<span class="ki">⋮</span>';
  if(isIOS){
   const pad=/iPad/.test(UA)||(navigator.platform==='MacIntel');
-  if(/CriOS/.test(UA))return[`Vajuta aadressiribal jagamisnuppu ${sh}`,'Vali „Lisa avakuvale“','Vajuta „Lisa“'];
-  if(/FxiOS/.test(UA))return['Vajuta all menüünuppu <span class="ki">☰</span>','Vali „Jaga“',`Vali „Lisa avakuvale“`];
-  if(/EdgiOS/.test(UA))return['Vajuta all menüünuppu <span class="ki">⋯</span>','Vali „Lisa telefoni“'];
-  return[`Vajuta ${pad?'üleval':'all'} jagamisnuppu ${sh}`,'Keri alla ja vali „Lisa avakuvale“','Vajuta „Lisa“'];
+  if(/CriOS/.test(UA))return L([`Vajuta aadressiribal jagamisnuppu ${sh}`,'Vali „Lisa avakuvale“','Vajuta „Lisa“'],[`Tap the share button ${sh} in the address bar`,'Choose “Add to Home Screen”','Tap “Add”']);
+  if(/FxiOS/.test(UA))return L(['Vajuta all menüünuppu <span class="ki">☰</span>','Vali „Jaga“','Vali „Lisa avakuvale“'],['Tap the menu button <span class="ki">☰</span>','Choose “Share”','Choose “Add to Home Screen”']);
+  if(/EdgiOS/.test(UA))return L(['Vajuta all menüünuppu <span class="ki">⋯</span>','Vali „Lisa telefoni“'],['Tap the menu button <span class="ki">⋯</span> at the bottom','Choose “Add to phone”']);
+  return L([`Vajuta ${pad?'üleval':'all'} jagamisnuppu ${sh}`,'Keri alla ja vali „Lisa avakuvale“','Vajuta „Lisa“'],[`Tap the share button ${sh} at the ${pad?'top':'bottom'}`,'Scroll down and choose “Add to Home Screen”','Tap “Add”']);
  }
  if(isAndroid){
-  if(/SamsungBrowser/.test(UA))return['Vajuta all menüünuppu <span class="ki">☰</span>','Vali „Lisa leht“','Vali „Avaekraan“'];
-  if(/Firefox/.test(UA))return[`Vajuta menüünuppu ${dots}`,'Vali „Paigalda“'];
-  return[`Vajuta paremal üleval ${dots}`,'Vali „Lisa avaekraanile“ või „Installi rakendus“'];
+  if(/SamsungBrowser/.test(UA))return L(['Vajuta all menüünuppu <span class="ki">☰</span>','Vali „Lisa leht“','Vali „Avaekraan“'],['Tap the menu button <span class="ki">☰</span> at the bottom','Choose “Add page to”','Choose “Home screen”']);
+  if(/Firefox/.test(UA))return L([`Vajuta menüünuppu ${dots}`,'Vali „Paigalda“'],[`Tap the menu button ${dots}`,'Choose “Install”']);
+  return L([`Vajuta paremal üleval ${dots}`,'Vali „Lisa avaekraanile“ või „Installi rakendus“'],[`Tap ${dots} at the top right`,'Choose “Add to Home screen” or “Install app”']);
  }
- if(/Macintosh/.test(UA)&&/Safari/.test(UA)&&!/Chrome|Chromium|Edg|Firefox/.test(UA))return['Vali menüüst „Fail“','Vali „Lisa Dokki“'];
- if(/Chrome|Edg/.test(UA))return['Vajuta aadressiriba paremas otsas paigaldamise ikooni',`või menüü ${dots} › „Salvesta ja jaga“ › „Installi“`];
+ if(/Macintosh/.test(UA)&&/Safari/.test(UA)&&!/Chrome|Chromium|Edg|Firefox/.test(UA))return L(['Vali menüüst „Fail“','Vali „Lisa Dokki“'],['Open the “File” menu','Choose “Add to Dock”']);
+ if(/Chrome|Edg/.test(UA))return L(['Vajuta aadressiriba paremas otsas paigaldamise ikooni',`või menüü ${dots} › „Salvesta ja jaga“ › „Installi“`],['Click the install icon at the right end of the address bar',`or menu ${dots} › “Cast, save, and share” › “Install page as app”`]);
  return null;
 }
 function openInstall(auto){
- if(standalone()){toast('Rakendus on juba avaekraanil');return}
+ if(standalone()){toast(L('Rakendus on juba avaekraanil','The app is already on your home screen'));return}
  const st=BIP?null:installSteps();
- if(!BIP&&!st){if(!auto)toast('Selles brauseris ei saa avaekraanile lisada. Proovi Chrome\'i või Safarit.');return}
- const where=isIOS||isAndroid?'avaekraanile':'arvutisse';
- $('#instT').textContent=isIOS||isAndroid?'Lisa avaekraanile':'Paigalda arvutisse';
- $('#instP').textContent=`Siis avaneb buss.veebi.dev nagu äpp: ühe puudutusega, ilma aadressiribata.`;
+ if(!BIP&&!st){if(!auto)toast(L('Selles brauseris ei saa avaekraanile lisada. Proovi Chrome\'i või Safarit.','This browser can’t add apps to the home screen. Try Chrome or Safari.'));return}
+ const ph=isIOS||isAndroid;
+ $('#instT').textContent=ph?L('Lisa avaekraanile','Add to Home Screen'):L('Paigalda arvutisse','Install on this computer');
+ $('#instP').textContent=L('Siis avaneb buss.veebi.dev nagu äpp: ühe puudutusega, ilma aadressiribata.','Then buss.veebi.dev opens like an app: one tap, no address bar.');
+ $('#instNo').textContent=L('Hiljem','Later');
  $('#instSteps').innerHTML=st?st.map(s=>`<li>${s}</li>`).join(''):'';
  $('#instSteps').hidden=!st;
- $('#instOk').textContent=BIP?'Lisa '+where:'Selge';
+ $('#instOk').textContent=BIP?(ph?L('Lisa avaekraanile','Add'):L('Paigalda','Install')):L('Selge','Got it');
  if(isIOS&&!BIP)$('#inst').dataset.arrow=/iPad|Macintosh/.test(UA)?'up':(/CriOS|EdgiOS/.test(UA)?'up':'down');else delete $('#inst').dataset.arrow;
  openDlg('#inst');if(auto)LS.set('buss-inst-at',String(Date.now()));
 }
@@ -1458,7 +1497,7 @@ const TUT=[
  {el:'#grab',phone:1,t:'Lohista riba',p:'Tõmba riba alla, kui tahad kaarti näha, ja üles, kui tahad rohkem näha. Seaded sulgevad samamoodi.'},
  {el:'#favChips',t:'Lemmikud',p:'Vajuta otsingus tähte ja koht jääb siia ühe puudutuse kaugusele. Kodu, töö, trenn.'},
  {t:'Jõua kiiremini',ic:'run',p:'Teede juures on lüliti „Jõua kiiremini“. See näitab, kus tasub sörkida või kiirelt joosta, et varasemale bussile jõuda.'},
- {t:'Luba asukoht',ic:'locate',p:'Siis näitan lähimaid peatusi ja teed otse sinu juurest. Asukoht jääb sinu seadmesse.',loc:1}
+ {t:L('Luba asukoht','Allow location'),ic:'locate',p:L('Siis näitan lähimaid peatusi ja teed otse sinu juurest. Asukoht jääb sinu seadmesse.','Then I show the nearest stops and routes straight from where you are. Your location stays on your device.'),loc:1}
 ];
 let tutI=0,tutL=[];
 function startTut(){
@@ -1472,8 +1511,8 @@ function showTut(){
  $('#tutIc').innerHTML=s.ic?I[s.ic]:'';$('#tutIc').hidden=!s.ic;
  $('#tutDots').innerHTML=tutL.map((_,i)=>`<i class="${i===tutI?'on':''}"></i>`).join('');
  const last=tutI===tutL.length-1;
- $('#tutNext').textContent=s.loc?'Luba asukoht':last?'Valmis':'Edasi';
- $('#tutSkip').textContent=s.loc?'Hiljem':last?'':'Jäta vahele';$('#tutSkip').hidden=last&&!s.loc;
+ $('#tutNext').textContent=s.loc?L('Luba asukoht','Allow location'):last?'Valmis':'Edasi';
+ $('#tutSkip').textContent=s.loc?L('Hiljem','Later'):last?'':'Jäta vahele';$('#tutSkip').hidden=last&&!s.loc;
  const el=s.el&&$(s.el),r=el&&el.offsetParent?el.getBoundingClientRect():null;
  if(r&&r.width){const pdg=6;Object.assign(ring.style,{left:r.left-pdg+'px',top:r.top-pdg+'px',width:r.width+pdg*2+'px',height:Math.min(r.height,innerHeight*.4)+pdg*2+'px'});ring.classList.add('on');
   const bh=box.offsetHeight||200,below=r.bottom+16+bh<innerHeight-12;box.style.top=(below?Math.min(r.bottom+16,innerHeight-bh-12):Math.max(12,r.top-16-bh))+'px';box.classList.remove('mid')}

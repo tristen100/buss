@@ -660,3 +660,5 @@ body.mini .fabs{opacity:1;pointer-events:auto}
 .nowbtn{height:32px;padding:0 11px 0 9px;border-radius:var(--pill);background:var(--ink);color:var(--on-ink);display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;white-space:nowrap;border:0;cursor:pointer}
 .nowbtn svg{width:16px;height:16px}
 .nowrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text-2);margin:0 0 10px}
+/* locate button while the map follows you */
+.fab.locate.on{color:var(--bus)}
