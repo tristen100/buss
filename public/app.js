@@ -886,7 +886,17 @@ $('#zin').onclick=()=>map&&map.zoomIn();$('#zout').onclick=()=>map&&map.zoomOut(
 const dpop=$('#dpop');
 $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('open');dpop.classList.toggle('open',o);$('#donate').setAttribute('aria-expanded',o);if(o){lens();if(!isDesk()){dpop.style.top=($('#donate').getBoundingClientRect().top)+'px';dpop.style.right='76px'}}};
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
-$$('.sgi').forEach(b=>b.onclick=e=>{e.preventDefault();const t=document.getElementById(b.getAttribute('aria-controls')),o=t.hidden;t.hidden=!o;b.setAttribute('aria-expanded',o)});
+/* info pop-ups: one floating card that grows out of the (i) */
+let tipFor=null;const tipPop=$('#tipPop');
+function tipClose(){if(!tipFor)return;tipFor.setAttribute('aria-expanded',false);tipFor=null;tipPop.classList.remove('open')}
+function tipOpen(b){const t=document.getElementById(b.getAttribute('aria-controls'));tipPop.textContent=t.content.textContent.trim();
+ const r=b.getBoundingClientRect(),W=tipPop.offsetWidth,H=tipPop.offsetHeight,vw=innerWidth,vh=innerHeight;
+ let x=Math.max(12,Math.min(vw-W-12,r.left+r.width/2-28)),y=r.bottom+8;if(y+H>vh-12)y=Math.max(12,r.top-H-8);
+ tipPop.style.left=x+'px';tipPop.style.top=y+'px';tipPop.style.transformOrigin=`${r.left+r.width/2-x}px ${y>r.top?0:H}px`;
+ tipFor=b;b.setAttribute('aria-expanded',true);requestAnimationFrame(()=>tipPop.classList.add('open'))}
+$$('.sgi').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();if(tipFor===b){tipClose();return}tipClose();tipOpen(b)});
+addEventListener('pointerdown',e=>{if(tipFor&&!tipPop.contains(e.target)&&!tipFor.contains(e.target))tipClose()},true);
+addEventListener('scroll',tipClose,true);addEventListener('resize',tipClose);addEventListener('keydown',e=>{if(e.key==='Escape')tipClose()});
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
 let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
@@ -1001,7 +1011,7 @@ function renderSettings(){renderAcct();openFavAdd(false,true);renderFavs();rende
 /* favourites: tap a row to rename or change its icon, drag the handle to reorder, delete with undo */
 const ICN={home:'Kodu',work:'Töö',school:'Kool',gym:'Trenn',shop:'Pood',fam:'Pere',star:'Täht',pin:'Koht'};
 function renderFavs(flash){
- const L=$('#favList');
+ const L=$('#favList');$('#favSum').textContent=FAVS.length?FAVS.map(f=>f.n).join(' · '):'Pole veel';
  if(!FAVS.length){L.innerHTML=`<div class="fempty"><span class="ico">${I.star}</span><div class="pt"><b>Lemmikuid pole veel</b><small>Lisa koht, kuhu sõidad tihti, või vajuta otsingus tähte. See jääb avalehele ühe puudutuse kaugusele.</small></div></div>`;return}
  L.innerHTML=FAVS.map((f,i)=>`<div class="fav ${i===flash?'fresh':''}" data-i="${i}">
   <button class="fm" aria-label="${esc(f.n)}, ${esc(f.a)}. Muuda"><span class="ico">${I[f.ic]}</span><span class="pt"><b>${esc(f.n)}</b><small>${esc(f.a)}</small></span><span class="pen">${I.pen}</span></button>
@@ -1028,6 +1038,7 @@ function favDrag(e,g,i){
   if(favMove(i,to)){renderFavs();say(`${FAVS[to].n}: ${to+1}. kohal`)}else{row.classList.remove('lift');rows.forEach(r=>r.style.transform='')}};
 }
 function openFavAdd(on,quiet){
+ if(on)fold('fav',true);
  const box=$('#favAddBox');box.hidden=!on;$('#favAdd').hidden=on;$('#favAdd').setAttribute('aria-expanded',on);
  if(!on)return;$('#favQ').value='';renderFavRes();if(!quiet){$('#favQ').focus({preventScroll:true});box.scrollIntoView({block:'nearest',behavior:RM?'auto':'smooth'})}
 }
@@ -1717,7 +1728,9 @@ addEventListener('resize',()=>{if($('#tut').classList.contains('on'))setTimeout(
 
 /* ================= Rakendus rows in settings ================= */
 $('#appSug').onclick=openSuggest;
-$('#paceTog').onclick=e=>{const b=e.currentTarget,o=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',o);$('#paceBody').hidden=!o};
+/* folds (speeds, favourites, footer): the height glides open, the contents drop in */
+function fold(id,o){const b=$('#'+id+'Tog'),body=$('#'+id+'Body');if(o===undefined)o=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',o);body.classList.toggle('open',o);body.inert=!o}
+for(const id of ['pace','fav','foot']){fold(id,false);$('#'+id+'Tog').onclick=()=>fold(id)}
 $('#appInst').onclick=()=>openInstall(false);
 $('#appTut').onclick=()=>{closeSettings();setTimeout(startTut,RM?0:350)};
 $('#appInst').hidden=standalone();

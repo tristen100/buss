@@ -713,12 +713,37 @@ body.picking #map canvas{cursor:crosshair}
 .pacetog{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .pacetog .cv svg{transition:transform .3s var(--ease)}
 .pacetog[aria-expanded=true] .cv svg{transform:rotate(180deg)}
-#paceBody{border-top:1px solid var(--line,rgba(127,127,127,.18))}
 #appSug .pt b{white-space:normal;overflow:visible}
 .sgtip.in{margin:0 10px 10px}
 .pt b.sgh{display:flex}
-details.setfoot summary{list-style:none;display:flex;align-items:center;gap:4px;cursor:pointer;padding:6px 0;font-size:13px;font-weight:600;color:var(--text-2)}
-details.setfoot summary::-webkit-details-marker{display:none}
-details.setfoot summary span{display:grid;width:16px;height:16px}details.setfoot summary svg{width:16px;height:16px;transition:transform .3s var(--ease)}
-details.setfoot[open] summary svg{transform:rotate(180deg)}
-details.setfoot p{margin:6px 0 0}
+
+/* info pop-up: floats out of the (i) like a new tab growing out of its button */
+.tippop{position:fixed;z-index:60;left:0;top:0;width:min(290px,calc(100vw - 32px));padding:14px 16px;border-radius:20px;font-size:14px;line-height:1.45;color:var(--text);
+ box-shadow:0 18px 50px rgba(0,0,0,.35),0 2px 8px rgba(0,0,0,.18);
+ opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(0,-4px,0) scale(.18,.08);filter:blur(10px);border-radius:40px;
+ transition:opacity .16s ease,transform .22s cubic-bezier(.4,0,1,1),filter .2s ease,border-radius .22s ease,visibility 0s .24s}
+.tippop.open{opacity:1;visibility:visible;pointer-events:auto;transform:none;filter:none;border-radius:20px;
+ transition:opacity .18s ease,transform .62s linear(0,.007,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.67 16.2%,.778 19.2%,.87 22.6%,.94 26.5%,.992 31.2%,1.022 36.3%,1.035 42.6%,1.032 49.6%,1.014 62.3%,1.003 76%,.999),filter .32s ease,border-radius .45s ease,visibility 0s}
+.sgi{transition:transform .3s var(--spring),background .2s ease,color .2s ease}.sgi:active{transform:scale(.88)}
+/* speeds fold: height glides, contents fade and drop in */
+.fold{display:grid;grid-template-rows:0fr;transition:grid-template-rows .5s cubic-bezier(.32,.72,0,1)}
+.fold>.foldin{min-height:0;overflow:hidden;opacity:0;transform:translateY(-8px) scale(.985);transform-origin:top center;transition:opacity .25s ease,transform .45s cubic-bezier(.32,.72,0,1)}
+.fold.open{grid-template-rows:1fr}
+.fold.open>.foldin{opacity:1;transform:none;transition:opacity .35s ease .08s,transform .5s cubic-bezier(.32,.72,0,1)}
+.fold.open>.foldin{border-top:1px solid var(--line,rgba(127,127,127,.18))}
+@media (prefers-reduced-motion:reduce){.tippop,.tippop.open{transform:none;filter:none;transition:opacity .2s ease,visibility 0s}.fold,.fold>.foldin{transition:none}}
+.tippop.solidish{background:color-mix(in srgb,var(--g-solid) 100%,transparent);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6)}
+.tippop.solidish{background:linear-gradient(180deg,var(--g-solid),var(--g-solid)),var(--bg,#111)}
+.foottog{display:flex;align-items:center;gap:4px;border:0;background:none;font:inherit;cursor:pointer;padding:6px 0;font-size:13px;font-weight:600;color:var(--text-2)}
+.foottog span{display:grid;width:16px;height:16px}.foottog svg{width:16px;height:16px;transition:transform .45s cubic-bezier(.32,.72,0,1)}
+.foottog[aria-expanded=true] svg{transform:rotate(180deg)}
+.setfoot .fold.open>.foldin{border-top:0}.setfoot p{margin:6px 0 0}
+.pacetog .cv svg{transition:transform .45s cubic-bezier(.32,.72,0,1)}
+#favSum{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pacetog .pt{min-width:0}
+/* small things that appear inside a page drop in softly */
+@keyframes dropIn{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes popIn{0%{opacity:0;transform:scale(.3);filter:blur(8px)}55%{opacity:1;filter:none}100%{transform:none}}
+.favadd:not([hidden]){animation:dropIn .45s cubic-bezier(.32,.72,0,1)}
+.maplibregl-popup-content:has(.pcard){animation:popIn .55s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999);transform-origin:bottom center}
+@media (prefers-reduced-motion:reduce){.favadd:not([hidden]),.maplibregl-popup-content:has(.pcard){animation:none}}
