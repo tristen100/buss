@@ -1,5 +1,5 @@
 // buss.veebi.dev: Tallinn and Tartu public transport, Tallinn with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=0bdfa57f';
+import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=017186c2';
 import { walker } from './walk.js?v=c9fc6e7b';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
@@ -1299,7 +1299,8 @@ async function compute(o={}){
  if(Date.now()-DELAYS_AT>45000)freshLive()
  // "Lahku kohe" plans from the moment the search started; the refresh / "Praegu" button moves it to now
  const T0=W.k==='now'?(state.t0||(state.t0={ymd:c.ymd,min:c.min})):null;
- const ymd=T0?T0.ymd:addDays(c.ymd,W.day),t=T0?T0.min:W.t;
+ // after midnight (before 04:00) "Viimane buss" today means tonight's, so the night that began yesterday
+ const ymd=T0?T0.ymd:addDays(c.ymd,W.day-(W.k==='last'&&c.min<240?1:0)),t=T0?T0.min:W.t;
  const P=state.pace,q={from:fromLL(),to:state.to.ll,ymd,t,walk:P.walk,jog:P.jog,run:P.run,maxFast:P.max,board:P.bw,boardFast:P.bf,fast:0,noReg:!state.regTown,delays:live?DELAYS:new Map()};
  await realWalks(q);if(my!==CMP)return;
  const fast=state.run&&W.k==='now';

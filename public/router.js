@@ -7,6 +7,7 @@ export const DETOUR = 1.25;           // straight line to walking path (Tristen'
 export const BOARD = 1;               // minutes spare at a stop (default; q.board when walking, q.boardFast when jogging/running)
 export const ACCESS = 2000, XFER = 600;      // straight-line metres: to/from a stop, between stops (wider finds 1+ min faster trips for ~9%)
 const ROUNDS = 5;
+const SPAN = 30;     // "leave at t" shows the options leaving in the next half hour
 
 export const dist = (a, b) => Math.hypot((b[0] - a[0]) * KX, (b[1] - a[1]) * KY);
 
@@ -183,12 +184,14 @@ export class Router {
     return { legs, dep: legs[0].a, arr: legs[legs.length - 1].b, rides: legs.filter(l => l.m === "ride").length };
   }
 
-  /* Several options for "leave at t": search again after each one's departure, then sort by arrival. */
+  /* Several options for "leave at t": search again after each one's departure, then sort by arrival.
+     Rides are offered even when walking the whole way is quicker (late at night the wait often makes it so; the walk
+     is shown beside them anyway), and the options reach at least SPAN minutes past t. */
   plan(q, want = 5, tries = 7) {
-    const seen = new Map();
-    let t = q.t, walk = null;
-    for (let i = 0; i < tries && seen.size < want + 3; i++) {
-      const r = this.search({ ...q, t });
+    const seen = new Map(), span = q.span ?? SPAN;
+    let t = q.t, walk = null, far = -Infinity;
+    for (let i = 0; i < tries + 6 && (i < tries && seen.size < want + 3 || far < q.t + span); i++) {
+      const r = this.search({ noWalk: 1, ...q, t });
       walk = walk || r.walk;
       if (!r.journeys.length) break;
       let next = Infinity;
@@ -197,6 +200,7 @@ export class Router {
         const sig = j.legs.filter(l => l.m === "ride").map(l => l.key + "@" + l.i0).join("|");
         if (!seen.has(sig)) seen.set(sig, j);
         next = Math.min(next, j.dep);
+        far = Math.max(far, j.dep);
       }
       if (next === Infinity) break;
       t = Math.max(t + 1, Math.floor(next) + 1);
@@ -204,7 +208,9 @@ export class Router {
     let out = [...seen.values()].sort((a, b) => a.arr - b.arr || b.dep - a.dep);
     // drop options that leave earlier and arrive later than another, and near copies of the same line plan
     out = out.filter((j, i) => !out.some((o, k) => k !== i && o.arr <= j.arr && o.dep >= j.dep && (o.arr < j.arr || o.dep > j.dep || k < i)));
-    return { journeys: out.slice(0, want), walk };
+    // everything leaving in the next SPAN minutes (up to 8), and at least `want` options
+    const soon = out.filter(j => j.dep <= q.t + span).length;
+    return { journeys: out.slice(0, Math.max(want, Math.min(soon, 8))), walk };
   }
 
   /* Latest departure that still arrives by `t` (binary search over the leave time). */
@@ -224,10 +230,11 @@ export class Router {
     return r;
   }
 
-  /* Last connection of the evening (leaves before 02:00) and first in the morning (from 04:00). */
+  /* Last connection of the evening (leaves before 04:00, night lines included) and first in the morning (from 04:00). */
   lastOne(q) {
-    let lo = 18 * 60, hi = 26 * 60;
-    const ok = t => this.search({ ...q, t, noWalk: 1 }).journeys.some(j => j && j.arr < 27 * 60 && j.legs.some(l => l.m === "ride" && l.a >= t));
+    // night lines (91-96 in Tallinn) run until about 03:30, so the evening's last ride can leave as late as 04:00
+    let lo = 18 * 60, hi = 28 * 60;
+    const ok = t => this.search({ ...q, t, noWalk: 1 }).journeys.some(j => j && j.arr < 29 * 60 && j.legs.some(l => l.m === "ride" && l.a >= t));
     if (!ok(lo)) return { journeys: [], walk: null };
     while (hi - lo > 1) { const m = Math.floor((lo + hi) / 2); if (ok(m)) lo = m; else hi = m; }
     const r = this.search({ ...q, t: lo, noWalk: 1 });
