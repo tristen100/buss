@@ -882,9 +882,8 @@ $('#pickOk').onclick=()=>{if(!PICK)return;const ll=pickLL(),f=PICK,r=pickName;en
   if(!d.on&&Math.hypot(d.x-d.sx,d.y-d.sy)>6){clearTimeout(d.t);lift()}
   if(d.on){pickPin.style.transition='none';pinTo(d.x+d.ox,d.y+d.oy,0)}});
  const up=e=>{if(!d||e.pointerId!==d.id)return;clearTimeout(d.t);const was=d.on;d=null;map.dragPan.enable();pickPin.classList.remove('lift');if(!was)return;
-  const[vx,vy]=visC(),r=$('#map').getBoundingClientRect(),cx=r.width/2,cy=r.height/2,dx=pickPin._x-vx,dy=pickPin._y-vy;
-  const c=map.unproject([cx+dx,cy+dy]),T=RM?0:450;
-  map.easeTo({center:c,duration:T,easing:t=>1-Math.pow(1-t,3)});
+  const[vx,vy]=visC(),dx=pickPin._x-vx,dy=pickPin._y-vy,T=RM?0:450;
+  map.panBy([dx,dy],{duration:T,easing:t=>1-Math.pow(1-t,3)});
   pickPin.style.transition='none';requestAnimationFrame(()=>{pickPin.style.transition=T?`transform ${T}ms cubic-bezier(.33,1,.68,1)`:'none';pickPin.style.transform=`translate3d(${vx}px,${vy}px,0)`;pickPin._x=vx;pickPin._y=vy});
   setTimeout(pickLabel,T+20)};
  pickPin.addEventListener('pointerup',up);pickPin.addEventListener('pointercancel',up);
