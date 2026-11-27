@@ -1,5 +1,5 @@
-// buss.veebi.dev: Tallinn public transport with live times. Built by VeebiDev, MIT licence.
-import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=a4e6ca5d';
+// buss.veebi.dev: Tallinn and Tartu public transport, Tallinn with live times. Built by VeebiDev, MIT licence.
+import { Router, decodePoly, DETOUR, ACCESS } from './router.js?v=0bdfa57f';
 import { walker } from './walk.js?v=c9fc6e7b';
 import { siri, delaysFor, vehicles, notices } from './live.js?v=0ce44c1c';
 "use strict";
@@ -93,8 +93,9 @@ const DEF_LL=[24.7445,59.4330]; // Vabaduse väljak, used until we know where yo
 const API='https://veebi.dev/api/buss/';
 let NOTES=[];
 async function loadNotes(){try{NOTES=await notices(clock().ymd);if(state.view==='results')renderResults();else if(state.view==='route')renderRoute();else if(state.view==='home'&&NEAR.length)loadNear()}catch(e){}setTimeout(loadNotes,600000)}
-const notesFor=(m,n)=>NOTES.filter(x=>x.routes.has(String(n))&&(!x.modes.size||x.modes.has(m)));
-const legNotes=R=>{const seen=new Set(),o=[];for(const l of R.legs)if(l.n&&(l.m==='bus'||l.m==='tram'||l.m==='trol'))for(const x of notesFor(l.m,l.n))if(!seen.has(x.key)){seen.add(x.key);o.push([l,x])}return o};
+// Tallinn's notices only: Tartu lines (trt) share numbers with Tallinn's
+const notesFor=(m,n,trt)=>trt?[]:NOTES.filter(x=>x.routes.has(String(n))&&(!x.modes.size||x.modes.has(m)));
+const legNotes=R=>{const seen=new Set(),o=[];for(const l of R.legs)if(l.n&&(l.m==='bus'||l.m==='tram'||l.m==='trol'))for(const x of notesFor(l.m,l.n,l.trt))if(!seen.has(x.key)){seen.add(x.key);o.push([l,x])}return o};
 function noteBox(x){return`<details class="ntc"><summary>${I.warn}<span>${esc(x.title)}</span></summary>${x.paras.map(t=>`<p>${esc(t)}</p>`).join('')}${x.links.map(k=>`<a href="${esc(k.href)}" target="_blank" rel="noopener">${esc(k.t)}</a>`).join(' · ')}</details>`}
 async function loadData(){
  const r=await fetch('data/tt.json');if(!r.ok)throw new Error('tt');TT=await r.json();RT=new Router(TT);WALK.ready.then(()=>RT.setWalk(WALK.stops));
@@ -140,7 +141,7 @@ function viewJ(j,ctx){
   if(r.m==='ride'){
    const p=TT.pats[r.pi],ln=TT.routes[p.r];
    if(prev&&prev.b<r.a-.4)legs.push({m:'wait',a:prev.b,b:r.a,raw:{m:'wait'}});
-   legs.push({m:ln[1],n:ln[0],a:r.a,b:r.b,from:stopName(r.fromStop),at:stopName(r.toStop),dir:p.h,stops:r.i1-r.i0,raw:r,live:liveOf(r,ctx)});
+   legs.push({m:ln[1],n:ln[0],trt:!!ln[3],a:r.a,b:r.b,from:stopName(r.fromStop),at:stopName(r.toStop),dir:p.h,stops:r.i1-r.i0,raw:r,live:liveOf(r,ctx)});
   }else{
    const to=r.toStop!=null?stopName(r.toStop):null,fr=r.fromStop!=null?stopName(r.fromStop):null;
    const t=r.eg?`${VERB.walk} sihtkohta`:fr&&fr===to?'Mine teise peatusesse':`${VERB[r.m]||VERB.walk} ${to} peatusse`;
@@ -634,6 +635,7 @@ function renderResults(loading){
  const c=clock();
  let out=`<div class="legend"><button class="whenchip" id="whenChip" aria-expanded="false" aria-controls="rWhen">${I.clock}${whenTxt()}<span class="cv">${I.chev}</span></button>${nowBtn()}${W.k==='now'?`<span><i class="l1"></i>live ${hm(c.min)}</span><span><i class="l2"></i>sõiduplaani järgi</span>`:whenLive()?`<span><i class="l1"></i>live</span>`:`<span><i class="l2"></i>kõik sõiduplaani järgi</span>`}</div><div class="when rw" id="rWhen" hidden></div>`;
  if(!L.length){
+  if(inTartu(fromLL())!==inTartu(state.to.ll)){$('#resBody').innerHTML=out+`<div class="note">Tallinna ja Tartu vahel teid ei otsi: siin on linnaliinid ja nende ümbrus.</div>${ATTR}`;bindWhenChip();return}
   out+=`<div class="note">${W.k==='first'||W.k==='last'?'Sel päeval ühendust ei leidnud.':'Ühistranspordiga ei leidnud kiiremat teed kui jalgsi.'} ${state.walk?`Jalgsi ${fmtM(state.walk.m)}, umbes ${mins(state.walk.min)} min.`:''}</div>${ATTR}`;
   $('#resBody').innerHTML=out;bindWhenChip();return;
  }
@@ -674,7 +676,7 @@ function renderRoute(){
   else{
    const xf=R.legs.slice(0,i).some(x=>x.from);
    s+=`<li class="stp stop"><time>${hm(l.a)}</time><span class="nd"></span><div class="tx"><b>${esc(l.from)}</b>${xf?'<small>ümberistumine</small>':''}</div></li>`;
-   s+=`<li class="stp leg" style="--c:${col(l.m)}"><time></time><span class="nd"></span><div class="tx"><div class="ln"><span class="lg ${l.m}">${I[l.m]}${esc(l.n)}</span>${MODE[l.m]} ${esc(l.n)} → ${esc(l.dir)}</div>${stepLive(l)}${(l.m==='bus'||l.m==='tram'||l.m==='trol')?notesFor(l.m,l.n).map(noteBox).join(''):''}<small>${l.stops} ${l.stops===1?'peatus':'peatust'} · ${Math.round(l.b-l.a)} min · välju: ${esc(l.at)}</small></div></li>`;
+   s+=`<li class="stp leg" style="--c:${col(l.m)}"><time></time><span class="nd"></span><div class="tx"><div class="ln"><span class="lg ${l.m}">${I[l.m]}${esc(l.n)}</span>${MODE[l.m]} ${esc(l.n)} → ${esc(l.dir)}</div>${stepLive(l)}${(l.m==='bus'||l.m==='tram'||l.m==='trol')?notesFor(l.m,l.n,l.trt).map(noteBox).join(''):''}<small>${l.stops} ${l.stops===1?'peatus':'peatust'} · ${Math.round(l.b-l.a)} min · välju: ${esc(l.at)}</small></div></li>`;
    s+=`<li class="stp stop"><time>${hm(l.b)}</time><span class="nd"></span><div class="tx"><b>${esc(l.at)}</b></div></li>`;
   }
  });
@@ -699,7 +701,7 @@ async function loadNear(force){
  const rows=[];let now=null;
  let tried=0;
  await Promise.all(ns.map(async([s,d])=>{if(!TT.stops.siri[s])return;tried++;try{const r=await siri(TT.stops.siri[s],force?0:20000);now=now??r.now;for(const [k,v] of RT.matchSiri(s,r.rows,ymd))DELAYS.set(k,v);for(const x of r.rows)rows.push({...x,stop:s,d})}catch(e){}}));
- // county buses and trains have no live feed: their timetable times
+ // county buses, trains and Tartu's city buses have no live feed: their timetable times
  const nowS=now??Math.round(clock().min*60),plan=planNear(ns,ymd,nowS);rows.push(...plan);
  if(now==null&&tried&&!plan.length){$('#near').innerHTML='<div class="note">Live-aegu ei saanud. Proovin uuesti.</div>';return}
  now=nowS;
@@ -707,15 +709,15 @@ async function loadNear(force){
  NEAR=rows.filter(r=>r.exp>=now-20).sort((a,b)=>a.exp-b.exp).filter(r=>{const k=r.mode+r.route+r.head;if(seen.has(k))return false;seen.add(k);return true}).slice(0,5);
  $('#liveClock').textContent=hm(now/60);
  $('#near').innerHTML=NEAR.length?NEAR.map((d,i)=>{const dl=Math.round((d.exp-d.sched)/60),stt=d.plan?'<span class="st-ok">sõiduplaani järgi</span>':dl>=1?`<span class="st-late">hilineb ${dl} min</span>`:dl<=-1?`<span class="st-early">${-dl} min varem</span>`:'<span class="st-ok">graafikus</span>',mn=Math.max(0,Math.round((d.exp-now)/60));
-  return`<button class="dep" data-i="${i}"><span class="lg ${d.mode}">${I[d.mode]||I.bus}${esc(d.route)}</span><span class="to">${esc(d.head)}<small>${notesFor(d.mode,d.route).length?`<span class="ntm">${I.warn}teade</span> · `:''}${MODE[d.mode]||'Buss'} · ${esc(stopName(d.stop))}</small></span><span class="when">${mn?mn+' min':'kohe'}<small>${stt}</small></span></button>`}).join(''):'<div class="note">Lähima tunni jooksul väljumisi pole.</div>';
+  return`<button class="dep" data-i="${i}"><span class="lg ${d.mode}">${I[d.mode]||I.bus}${esc(d.route)}</span><span class="to">${esc(d.head)}<small>${notesFor(d.mode,d.route,d.trt).length?`<span class="ntm">${I.warn}teade</span> · `:''}${MODE[d.mode]||'Buss'} · ${esc(stopName(d.stop))}</small></span><span class="when">${mn?mn+' min':'kohe'}<small>${stt}</small></span></button>`}).join(''):'<div class="note">Lähima tunni jooksul väljumisi pole.</div>';
  $$('#near .dep').forEach(b=>b.onclick=()=>{const d=NEAR[+b.dataset.i],sl=stopLL(d.stop);
-  let v=null,bd=1e9;for(const x of VEHS){if(x.route!==d.route||x.mode!==d.mode)continue;const dd=m(x.ll,sl);if(dd<bd){bd=dd;v=x}}
+  let v=null,bd=1e9;if(!d.plan)for(const x of VEHS){if(x.route!==d.route||x.mode!==d.mode)continue;const dd=m(x.ll,sl);if(dd<bd){bd=dd;v=x}}
   if(!map)return;const ll=v?(v.cur||v.ll):sl;map.easeTo({center:ll,zoom:15.6,padding:pad(),duration:RM?0:800});if(v)setTimeout(()=>vehPopup(v),RM?0:820)});
 }
 function planNear(ns,ymd,nowS){
  const day=RT.day(ymd),out=[],R=TT.routes;
- for(const [s,d] of ns)for(const [pi,i] of RT.byStop[s]){const p=TT.pats[pi],r=R[p.r];if(r[1]!=='reg'&&r[1]!=='train'||p.nbS?.has(i)||r[1]==='reg'&&!state.regTown&&RT.town[s])continue;
-  for(const tr of day[pi]){const t=(tr.t0+tr.pr[i])*60;if(t<nowS-20)continue;if(t>nowS+3600)break;out.push({mode:r[1],route:r[0],exp:t,sched:t,head:p.h,stop:s,d,plan:1});break}}
+ for(const [s,d] of ns)for(const [pi,i] of RT.byStop[s]){const p=TT.pats[pi],r=R[p.r];if(r[1]!=='reg'&&r[1]!=='train'&&!r[3]||p.nbS?.has(i)||r[1]==='reg'&&!state.regTown&&RT.town[s])continue;
+  for(const tr of day[pi]){const t=(tr.t0+tr.pr[i])*60;if(t<nowS-20)continue;if(t>nowS+3600)break;out.push({mode:r[1],route:r[0],exp:t,sched:t,head:p.h,stop:s,d,plan:1,trt:!!r[3]});break}}
  return out;
 }
 function renderHome(){renderFavChips();renderRecent();loadNear()}
@@ -750,8 +752,8 @@ const geoCache=new Map();
 async function geocode(q){
  if(geoCache.has(q))return geoCache.get(q);
  const c=state.me||DEF_LL,out=[];
- const ads=fetch(`https://inaadress.maaamet.ee/inaadress/gazetteer?address=${encodeURIComponent(q)}&results=10`).then(r=>r.json()).then(j=>{for(const a of j.addresses||[]){if(!a.viitepunkt_b)continue;const la=+a.viitepunkt_b,lo=+a.viitepunkt_l;if(la<59.25||la>59.6||lo<24.3||lo>25.2)continue;out.push({n:a.aadresstekst||a.ipikkaadress,s:[a.asustusyksus,a.omavalitsus].filter(Boolean).join(', '),ll:[+a.viitepunkt_l,+a.viitepunkt_b],src:'ads'})}}).catch(()=>{});
- const ph=fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${c[1].toFixed(3)}&lon=${c[0].toFixed(3)}&limit=6&lang=default&bbox=24.3,59.25,25.2,59.6`).then(r=>r.json()).then(j=>{for(const f of j.features||[]){const p=f.properties;if(!p.name&&!p.street)continue;if(/^(bus_stop|platform|stop_position|tram_stop|stop|halt)$/.test(p.osm_value)&&/^(highway|public_transport|railway)$/.test(p.osm_key))continue;const n=p.name||[p.street,p.housenumber].filter(Boolean).join(' ');out.push({n,s:[p.name?[p.street,p.housenumber].filter(Boolean).join(' '):'',p.district||p.city].filter(Boolean).join(', '),ll:f.geometry.coordinates,src:'ph'})}}).catch(()=>{});
+ const ads=fetch(`https://inaadress.maaamet.ee/inaadress/gazetteer?address=${encodeURIComponent(q)}&results=10`).then(r=>r.json()).then(j=>{for(const a of j.addresses||[]){if(!a.viitepunkt_b)continue;const la=+a.viitepunkt_b,lo=+a.viitepunkt_l;if(!inArea([lo,la]))continue;out.push({n:a.aadresstekst||a.ipikkaadress,s:[a.asustusyksus,a.omavalitsus].filter(Boolean).join(', '),ll:[+a.viitepunkt_l,+a.viitepunkt_b],src:'ads'})}}).catch(()=>{});
+ const ph=fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${c[1].toFixed(3)}&lon=${c[0].toFixed(3)}&limit=8&lang=default&bbox=24.3,58.25,27,59.62`).then(r=>r.json()).then(j=>{for(const f of j.features||[]){const p=f.properties;if(!p.name&&!p.street||!inArea(f.geometry.coordinates))continue;if(/^(bus_stop|platform|stop_position|tram_stop|stop|halt)$/.test(p.osm_value)&&/^(highway|public_transport|railway)$/.test(p.osm_key))continue;const n=p.name||[p.street,p.housenumber].filter(Boolean).join(' ');out.push({n,s:[p.name?[p.street,p.housenumber].filter(Boolean).join(' '):'',p.district||p.city].filter(Boolean).join(', '),ll:f.geometry.coordinates,src:'ph'})}}).catch(()=>{});
  await Promise.all([ads,ph]);
  const nq=norm(q),sc=p=>(m(c,p.ll)>15000?1.2:0)+sc0(p),sc0=p=>{const n=norm(p.n);return n===nq?0:n.startsWith(nq)?1:n.includes(nq)?2:p.src==='ads'&&/\d/.test(q)?1.5:3};out.sort((x,y)=>sc(x)-sc(y)||m(c,x.ll)-m(c,y.ll));
  const seen=[];const res=out.filter(p=>{if(seen.some(o=>norm(o.n)===norm(p.n)&&m(o.ll,p.ll)<150))return false;seen.push(p);return true}).slice(0,8);
@@ -857,7 +859,7 @@ function visC(){const W=innerWidth,H=innerHeight;
 function pinTo(x,y,ms){pickPin.style.transition=ms?`transform ${ms}ms cubic-bezier(.25,.1,.25,1)`:'none';pickPin.style.transform=`translate3d(${x}px,${y}px,0)`;pickPin._x=x;pickPin._y=y}
 function pickLL(){const r=$('#map').getBoundingClientRect(),c=map.unproject([pickPin._x-r.left,pickPin._y-r.top]);return[c.lng,c.lat]}
 function pickLabel(){if(!PICK)return;const ll=pickLL(),n=++pickRev;pickName=null;
- const b=$('#pickBar').querySelector('b');if(!inArea(ll)){b.textContent='Vali koht Tallinna kandis';$('#pickOk').disabled=true;return}
+ const b=$('#pickBar').querySelector('b');if(!inArea(ll)){b.textContent='Vali koht Tallinna või Tartu kandis';$('#pickOk').disabled=true;return}
  $('#pickOk').disabled=false;b.textContent='…';
  revName(ll).then(r=>{if(n!==pickRev||!PICK)return;pickName=r;b.textContent=r&&r.n?r.n:'Kaardil valitud koht'})}
 let pickLT=0;const pickLater=()=>{clearTimeout(pickLT);pickLT=setTimeout(pickLabel,350)};
@@ -872,7 +874,7 @@ function pickOnMap(field){
 }
 function endPick(){PICK=null;document.body.classList.remove('picking');$('#pickBar').hidden=true;pickPin.hidden=true;pickPin.classList.remove('lift','drop');clearTimeout(pickLT)}
 $('#pickX').onclick=()=>{endPick();go('search',{noFocus:true})};
-$('#pickOk').onclick=()=>{if(!PICK)return;const ll=pickLL(),f=PICK,r=pickName;endPick();if(!inArea(ll)){toast('Vali koht Tallinna kandis');pickOnMap(f);return}
+$('#pickOk').onclick=()=>{if(!PICK)return;const ll=pickLL(),f=PICK,r=pickName;endPick();if(!inArea(ll)){toast('Vali koht Tallinna või Tartu kandis');pickOnMap(f);return}
  pinMk=mk(h('<div class="mpin"></div>'),ll,'bottom');usePin(f,pinPlace(ll,r))};
 (()=>{let d=null;const LIFT=58;
  const lift=()=>{if(!d||d.on)return;d.on=true;pickPin.classList.add('lift');navigator.vibrate&&navigator.vibrate(10);pinTo(d.x+d.ox,d.y+d.oy,160)};
@@ -1590,14 +1592,16 @@ function followMe(ll){
  map.easeTo({center:ll,padding:pad(),duration:RM?0:800});
 }
 function meMarker(){if(!map)return;const el=h('<div class="me" aria-label="Sinu asukoht"></div>');meMk=mk(el,state.me||DEF_LL);el.style.display=state.me?'':'none'}
-const inArea=ll=>ll[0]>24.3&&ll[0]<25.3&&ll[1]>59.25&&ll[1]<59.62;
+// the app's areas: Tallinn with Harjumaa around it, and Tartu with the places around it
+const inTartu=ll=>ll[0]>26.45&&ll[0]<27&&ll[1]>58.25&&ll[1]<58.5;
+const inArea=ll=>ll[0]>24.3&&ll[0]<25.3&&ll[1]>59.25&&ll[1]<59.62||inTartu(ll);
 // indoors the phone's GPS is often 20-80 m off (at Roosikrantsi 8c it puts you in the school yard next door), so a fix
 // near your saved home (a favourite with the house icon) counts as being at home
 const HOME_R=80;
 function atHome(ll){let b=null,bd=HOME_R;for(const f of FAVS)if(f.ic==='home'&&f.ll){const d=m(f.ll,ll);if(d<bd){bd=d;b=f.ll}}return b?[b[0],b[1]]:ll}
 function setMe(ll,center){
  if(inArea(ll))ll=atHome(ll);
- if(!inArea(ll)){if(!outside){outside=true;toast(L('Oled Tallinnast väljas. Näitan teid kesklinnast.','You’re outside Tallinn. Showing routes from the city centre.'))}return}
+ if(!inArea(ll)){if(!outside){outside=true;toast(L('Oled Tallinnast ja Tartust väljas. Näitan teid Tallinna kesklinnast.','You’re outside Tallinn and Tartu. Showing routes from Tallinn’s city centre.'))}return}
  const first=!state.me;state.me=ll;
  if(meMk){meMk.setLngLat(ll);meMk.getElement().style.display=''}
  if(first){LS.set('buss-loc','1');if((state.view==='results'||(state.view==='search'&&FIELD==='from'&&$('#snote').textContent))&&!state.from&&state.to){$('#snote').innerHTML='';go('results',{fresh:true})}if(state.view==='home'){loadNear();if(!center)homeCam()}if(state.view==='search')renderPlaces()}
@@ -1763,7 +1767,7 @@ function maybeInstall(){
 
 /* ================= first-time guide ================= */
 const TUT=[
- {t:'Tere tulemast',p:'Siit leiad kiireima tee Tallinnas ja selle ümber: buss, tramm, troll, maakonnabuss, Elroni rong ja kõnd. Linnaliinid live-aegadega otse transport.tallinn.ee-st.'},
+ {t:'Tere tulemast',p:'Siit leiad kiireima tee Tallinnas, Tartus ja nende ümber: buss, tramm, troll, maakonnabuss, Elroni rong ja kõnd. Tallinna linnaliinid live-aegadega otse transport.tallinn.ee-st.'},
  {el:'#openSearch',t:'Kuhu lähed?',p:'Kirjuta aadress, koha või peatuse nimi. Näitan mitut teed ja millal kohale jõuad. Lahkumise või kohalejõudmise aja saad ise valida.'},
  {el:'#near',t:'Lähedal',p:'Väljumised lähimatest peatustest, hilinemised kohe näha. Puuduta rida ja näed sõidukit kaardil.'},
  {el:'#grab',phone:1,t:'Lohista riba',p:'Tõmba riba alla, kui tahad kaarti näha, ja üles, kui tahad rohkem näha. Seaded sulgevad samamoodi.'},

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>buss · kiireim tee Tallinnas</title>
+<title>buss · kiireim tee Tallinnas ja Tartus</title>
 <link rel="canonical" href="https://buss.veebi.dev/">
 <meta name="theme-color" content="#0B1016">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -11,11 +11,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="buss">
-<meta property="og:title" content="buss · kiireim tee Tallinnas">
-<meta property="og:description" content="Kiireim tee Tallinnas ja Harjumaal live-aegadega: buss, tramm, troll, maakonnabuss, rong, kõnd ja vajadusel jooks.">
+<meta property="og:title" content="buss · kiireim tee Tallinnas ja Tartus">
+<meta property="og:description" content="Kiireim tee Tallinnas, Harjumaal ja Tartus: buss, tramm, troll, maakonnabuss, rong, kõnd ja vajadusel jooks. Tallinnas live-aegadega.">
 <meta property="og:image" content="https://buss.veebi.dev/icons/og.png">
 <meta property="og:url" content="https://buss.veebi.dev/">
-<meta name="description" content="Kiireim tee Tallinnas ja Harjumaal live-aegadega: buss, tramm, troll, maakonnabuss, rong, kõnd ja vajadusel jooks.">
+<meta name="description" content="Kiireim tee Tallinnas, Harjumaal ja Tartus: buss, tramm, troll, maakonnabuss, rong, kõnd ja vajadusel jooks. Tallinnas live-aegadega.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230B1016'/%3E%3Cpath d='M9 22c0-7 14-5 14-12' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-dasharray='0 4.2'/%3E%3Ccircle cx='9' cy='22' r='3' fill='%23fff'/%3E%3Ccircle cx='23' cy='10' r='3' fill='%23FF2D87'/%3E%3C/svg%3E">
 <script>
   (function(){var R=document.documentElement,d=matchMedia('(prefers-color-scheme: dark)').matches,p='',g=null;
@@ -31,7 +31,7 @@
 <link rel="stylesheet" href="app.css?v=ec886650">
 </head>
 <body data-view="home">
-<div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
+<div id="map" role="application" aria-label="Kaart live-sõidukitega"></div>
 <div class="maploading" id="maploading">Laadin kaarti</div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="lensdefs"></defs></svg>
@@ -187,10 +187,10 @@
         <h3 id="sgLines">Liinid</h3>
         <div class="well">
           <div class="srow">
-            <div class="pt"><b class="sgh">Maakonnabussid Tallinnas<button class="sgi" aria-label="Mida see teeb" aria-expanded="false" aria-controls="regTip" data-i="info"></button></b></div>
-            <button class="tog" role="switch" aria-checked="false" id="regTog" aria-label="Maakonnabussid Tallinnas"><span class="kn"></span></button>
+            <div class="pt"><b class="sgh">Maakonnabussid linnas<button class="sgi" aria-label="Mida see teeb" aria-expanded="false" aria-controls="regTip" data-i="info"></button></b></div>
+            <button class="tog" role="switch" aria-checked="false" id="regTog" aria-label="Maakonnabussid linnas"><span class="kn"></span></button>
           </div>
-          <template id="regTip">Ei pakuta maakonnabussi sõiduks ühest Tallinna peatusest teise. Linnast välja ja linna sõites on need alati olemas.</template>
+          <template id="regTip">Ei pakuta maakonnabussi sõiduks ühest Tallinna või Tartu peatusest teise. Linnast välja ja linna sõites on need alati olemas.</template>
         </div>
       </section>
 
@@ -289,6 +289,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=0f852cb5"></script>
+<script type="module" src="app.js?v=9950185f"></script>
 </body>
 </html>

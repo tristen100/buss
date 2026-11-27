@@ -1,4 +1,4 @@
-// Trip planner: RAPTOR over Tallinn's timetable plus county buses and Elron (public/data/tt.json), minutes since local midnight.
+// Trip planner: RAPTOR over Tallinn's and Tartu's timetables plus county buses and Elron (public/data/tt.json), minutes since local midnight.
 // Live delays (from transport.tallinn.ee SIRI) are passed in per trip, so a route is chosen by expected times.
 // Plain ES module with no DOM, so the comparison tests run it in Node too.
 
@@ -19,16 +19,17 @@ export class Router {
     this.byStop = Array.from({ length: n }, () => []);
     // nb / na: stops of a pattern where you may not get on / off (long-distance lines in Tallinn)
     tt.pats.forEach(p => { p.nbS = p.nb && new Set(p.nb); p.naS = p.na && new Set(p.na); });
-    // county buses (mode reg). q.noReg: no county bus ride from one Tallinn stop to another (people in town rarely
-    // take them); rides that start or end outside Tallinn stay. Set after the grid below.
+    // county buses (mode reg). q.noReg: no county bus ride from one city stop to another (people in town rarely
+    // take them); rides that start or end outside the city stay. Set after the grid below.
     tt.pats.forEach(p => { p.reg = tt.routes[p.r][1] === "reg"; });
     tt.pats.forEach((p, pi) => p.s.forEach((s, i) => { if (i < p.s.length - 1) this.byStop[s].push([pi, i]); }));
     // stops near each other (grid of ~500 m cells)
     const cell = s => [Math.floor(this.ll[s][0] * KX / 500), Math.floor(this.ll[s][1] * KY / 500)];
     this.grid = new Map();
     for (let s = 0; s < n; s++) { const k = cell(s).join(","); (this.grid.get(k) || this.grid.set(k, []).get(k)).push(s); }
-    // "in town" = a Tallinn city stop (it has a SIRI id) or a county-only stop within 300 m of one
-    this.town = Array.from({ length: n }, (_, s) => S.siri[s] ? 1 : this.near(this.ll[s], 300).some(([o]) => S.siri[o]) ? 1 : 0);
+    // "in town" = a city stop (a Tallinn or Tartu city line stops there) or a county-only stop within 300 m of one
+    const city = new Uint8Array(n); tt.pats.forEach(p => { if (/^(bus|tram|trol)$/.test(tt.routes[p.r][1])) p.s.forEach(s => (city[s] = 1)); });
+    this.town = Array.from({ length: n }, (_, s) => city[s] || S.siri[s] ? 1 : this.near(this.ll[s], 300).some(([o]) => city[o]) ? 1 : 0);
     this.foot = Array.from({ length: n }, (_, s) => this.near(this.ll[s], XFER).filter(([o]) => o !== s));
     this.days = new Map();
     this.siriIx = new Map(); S.siri.forEach((id, i) => { if (id) this.siriIx.set(id, i); });

@@ -9,7 +9,16 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { join } from "node:path";
 
 const OUT = "public/data/walk";
-const BOX = [59.33, 24.52, 59.52, 25.0];           // south, west, north, east: Tallinn and a bit around it
+// south, west, north, east, and how the building and fence downloads are cut (lat edges, lon edges): Tallinn and a bit
+// around it, Tartu and a bit around it
+const BOXES = [
+  { b: [59.33, 24.52, 59.52, 25.0], bs: [59.40, 59.46], bw: [24.76], fs: [59.43], fw: [24.76] },
+  { b: [58.32, 26.60, 58.43, 26.85], bs: [58.375], bw: [26.72], fs: [], fw: [] },
+];
+const inAny = (la, lo) => BOXES.some(({ b }) => la > b[0] && la < b[2] && lo > b[1] && lo < b[3]);
+// a box cut at the given lat and lon edges: [[s, w, n, e], ...]
+const pieces = ([S, W, N, E], ys, xs) => { const Y = [S, ...ys, N], X = [W, ...xs, E], o = [];
+  for (let i = 1; i < Y.length; i++) for (let j = 1; j < X.length; j++) o.push([Y[i - 1], X[j - 1], Y[i], X[j]]); return o; };
 export const TY = 0.01, TX = 0.02;                 // tile size in degrees (about 1.1 × 1.1 km)
 const V = 5.5 / 3.6;                               // m/s, to turn waiting seconds into metres
 const PEN = { lights: Math.round(15 * V), plain: Math.round(6 * V), marked: Math.round(3 * V) }; // average wait: half a red light, a look both ways
@@ -31,15 +40,15 @@ async function overpass(q) {
 }
 // in six pieces: one query for the whole area is often refused when the servers are busy
 async function fetchBuildings() {
-  const els = [], [S, W, N, E] = BOX;
-  for (const [s, n] of [[S, 59.40], [59.40, 59.46], [59.46, N]]) for (const [w, e] of [[W, 24.76], [24.76, E]])
+  const els = [];
+  for (const B of BOXES) for (const [s, w, n, e] of pieces(B.b, B.bs, B.bw))
     els.push(...(await overpass(`[out:json][timeout:240];way["building"](${s},${w},${n},${e});out geom qt;`)).elements);
   return { elements: els };
 }
 // fences, walls, hedges, city walls: lines nobody walks through (only at a gate or where a path meets them)
 async function fetchFences() {
-  const els = [], [S, W, N, E] = BOX;
-  for (const [s, n] of [[S, 59.43], [59.43, N]]) for (const [w, e] of [[W, 24.76], [24.76, E]])
+  const els = [];
+  for (const B of BOXES) for (const [s, w, n, e] of pieces(B.b, B.fs, B.fw))
     els.push(...(await overpass(`[out:json][timeout:240];way["barrier"~"^(fence|wall|hedge|city_wall)$"](${s},${w},${n},${e});out geom qt;`)).elements);
   return { elements: els };
 }
@@ -78,6 +87,11 @@ function buildingMap(bj, keys) {
 }
 
 async function fetchOsm() {
+  let els2 = [];
+  for (const { b } of BOXES) els2 = els2.concat((await fetchOsmBox(b)).elements);
+  return { elements: els2 };
+}
+async function fetchOsmBox(BOX) {
   const q = `[out:json][timeout:180];(way["highway"]["highway"!~"motorway|motorway_link|construction|proposed|raceway|bus_guideway|abandoned|platform"](${BOX});
     );out body;>;out skel qt;node["highway"~"crossing|traffic_signals"](${BOX});out body;node["crossing"](${BOX});out body;node["barrier"](${BOX});out body;`;
   for (const u of ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"])
@@ -263,7 +277,7 @@ function buildStops() {
   const g = new Graph();
   for (const k of idx.tiles) g.add(k, JSON.parse(readFileSync(join(OUT, `t_${k}.json`), "utf8")));
   const S = tt.stops.n.map((_, i) => [tt.stops.lat[i] / 1e5, tt.stops.lon[i] / 1e5]);
-  const snap = S.map(([la, lo]) => (la > BOX[0] && la < BOX[2] && lo > BOX[1] && lo < BOX[3] ? g.snap([lo, la], 80) : null));
+  const snap = S.map(([la, lo]) => (inAny(la, lo) ? g.snap([lo, la], 80) : null));
   // stops by grid cell, for "stops within 600 m"
   const cell = new Map(), ck = (la, lo) => `${Math.floor(la / 0.006)}_${Math.floor(lo / 0.012)}`;
   S.forEach(([la, lo], i) => { const k = ck(la, lo); (cell.get(k) || cell.set(k, []).get(k)).push(i); });

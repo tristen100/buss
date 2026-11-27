@@ -1,5 +1,5 @@
 // Builds the app's timetable from Tallinn's public GTFS (transport.tallinn.ee/data/gtfs.zip) plus county buses and
-// Elron trains around Tallinn from the national GTFS.
+// Elron trains around Tallinn, and Tartu's city buses, county buses and trains, from the national GTFS.
 // Run: node tools/build-data.mjs [tallinn.zip] [national.zip]  ->  public/data/tt.json (stops, lines, trips) + public/data/shapes.json (line paths)
 // Run again whenever Tallinn publishes a new timetable (the app shows the data date in Seaded).
 import { execFileSync } from "node:child_process";
@@ -126,7 +126,8 @@ console.log("night trips moved back a day:", night);
    each trip inside the app's area is kept; a stop with the same stop code as a Tallinn stop is that stop (live times work).
    Pickup-only / drop-off-only stops are kept per pattern (nb = no boarding, na = no getting off). */
 const NAT = "https://eu-gtfs.remix.com/estonia_unified_gtfs.zip";
-const BOX = { w: 24.3, e: 25.3, s: 59.25, n: 59.62 };
+// the app's areas: Tallinn with Harjumaa around it, Tartu with the places around it
+const BOXES = [{ w: 24.3, e: 25.3, s: 59.25, n: 59.62 }, { w: 26.45, e: 27.0, s: 58.25, n: 58.5, tartu: 1 }];
 const ndir = join(dir, "nat");
 {
   const nzip = process.argv[3] && existsSync(process.argv[3]) ? process.argv[3] : join(dir, "nat.zip");
@@ -143,18 +144,20 @@ async function each(name, fn) {
   for await (const l of rl) { if (!h) { h = split(l.replace(/^﻿/, "")); continue; } if (!l) continue; const r = split(l), o = {}; h.forEach((k, i) => (o[k] = r[i] ?? "")); fn(o); }
 }
 const TLT = "10312960";
-const inBox = s => s && s.lon >= BOX.w && s.lon <= BOX.e && s.lat >= BOX.s && s.lat <= BOX.n;
+const inBox = (B, s) => s && s.lon >= B.w && s.lon <= B.e && s.lat >= B.s && s.lat <= B.n;
 const codeIx = new Map(); stops.code.forEach((c, i) => { if (c && !codeIx.has(c)) codeIx.set(c, i); });
 const nStops = new Map(); await each("stops.txt", s => nStops.set(s.stop_id, { code: s.stop_code, name: s.stop_name, lat: +s.stop_lat, lon: +s.stop_lon }));
 const nIx = new Map(); let shared = 0;
 const nStop = id => {
   if (nIx.has(id)) return nIx.get(id);
-  const s = nStops.get(id); let i = codeIx.get(s.code);
+  const s = nStops.get(id); let i = inBox(BOXES[0], s) ? codeIx.get(s.code) : null;
   if (i != null) shared++;
   else { i = stops.n.length; stops.n.push(s.name); stops.lat.push(Math.round(s.lat * 1e5)); stops.lon.push(Math.round(s.lon * 1e5)); stops.siri.push(0); stops.code.push(s.code); }
   nIx.set(id, i); return i;
 };
-const nRoutes = new Map(); await each("routes.txt", r => { if (r.agency_id !== TLT && (r.route_type === "2" || r.route_type === "3")) nRoutes.set(r.route_id, r); });
+const nRoutes = new Map(); await each("routes.txt", r => {
+  // Tartu's own city lines (competent authority "Tartu linn") are city buses there; they have no live times
+  r.tartu = r.competent_authority === "Tartu linn" && r.route_type === "3"; if (r.agency_id !== TLT && (r.route_type === "2" || r.route_type === "3")) nRoutes.set(r.route_id, r); });
 const nTrips = new Map(); await each("trips.txt", t => { if (nRoutes.has(t.route_id)) nTrips.set(t.trip_id, t); });
 const nTimes = new Map();
 await each("stop_times.txt", st => {
@@ -166,16 +169,17 @@ const nRouteIx = new Map(), nSvcUsed = new Set(), clips = new Map(); // shape ke
 let nTripsKept = 0;
 for (const [tid, a0] of nTimes) {
   a0.sort((x, y) => x[0] - y[0]);
-  // the longest run of stops inside the area
+  for (const B of BOXES) {
+  // the longest run of stops inside the area (a Tallinn-Tartu bus gives a piece in each)
   let bs = -1, bl = 0;
-  for (let i = 0; i < a0.length;) { if (!inBox(nStops.get(a0[i][1]))) { i++; continue; } let j = i; while (j < a0.length && inBox(nStops.get(a0[j][1]))) j++; if (j - i > bl) { bl = j - i; bs = i; } i = j; }
+  for (let i = 0; i < a0.length;) { if (!inBox(B, nStops.get(a0[i][1]))) { i++; continue; } let j = i; while (j < a0.length && inBox(B, nStops.get(a0[j][1]))) j++; if (j - i > bl) { bl = j - i; bs = i; } i = j; }
   if (bl < 2) continue;
   const a = a0.slice(bs, bs + bl).filter(x => !(x[4] && x[5]));
   // a ride needs a stop to get on before a stop to get off
   const firstOn = a.findIndex(x => !x[4]), lastOff = a.length - 1 - [...a].reverse().findIndex(x => !x[5]);
   if (firstOn < 0 || lastOff >= a.length || lastOff <= firstOn) continue;
   const t = nTrips.get(tid), R = nRoutes.get(t.route_id);
-  if (!nRouteIx.has(R.route_id)) { nRouteIx.set(R.route_id, routes.length); routes.push([R.route_short_name, R.route_type === "2" ? "train" : "reg", R.route_long_name]); }
+  if (!nRouteIx.has(R.route_id)) { nRouteIx.set(R.route_id, routes.length); routes.push(R.tartu ? [R.route_short_name, "bus", R.route_long_name, "trt"] : [R.route_short_name, R.route_type === "2" ? "train" : "reg", R.route_long_name]); }
   const s = a.map(x => nStop(x[1])), nb = [], na = [];
   a.forEach((x, i) => { if (x[4]) nb.push(i); if (x[5]) na.push(i); });
   const shKey = "N:" + t.shape_id + "|" + a[0][1] + "|" + a[a.length - 1][1];
@@ -196,6 +200,7 @@ for (const [tid, a0] of nTimes) {
   const sid = "N:" + t.service_id; nSvcUsed.add(t.service_id);
   P.t.push([getSvcIdx(sid), t0, di, 0]);
   nTripsKept++;
+  }
 }
 await each("calendar.txt", c => {
   if (!nSvcUsed.has(c.service_id)) return;

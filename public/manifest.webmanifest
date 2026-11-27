@@ -1,7 +1,7 @@
 {
-  "name": "buss · kiireim tee Tallinnas",
+  "name": "buss · kiireim tee Tallinnas ja Tartus",
   "short_name": "buss",
-  "description": "Kiireim tee Tallinnas live-aegadega: buss, tramm, troll, kõnd ja vajadusel jooks.",
+  "description": "Kiireim tee Tallinnas ja Tartus: buss, tramm, troll, rong, kõnd ja vajadusel jooks. Tallinnas live-aegadega.",
   "lang": "et",
   "start_url": "/?app=1",
   "scope": "/",
