@@ -886,6 +886,7 @@ $('#zin').onclick=()=>map&&map.zoomIn();$('#zout').onclick=()=>map&&map.zoomOut(
 const dpop=$('#dpop');
 $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('open');dpop.classList.toggle('open',o);$('#donate').setAttribute('aria-expanded',o);if(o){lens();if(!isDesk()){dpop.style.top=($('#donate').getBoundingClientRect().top)+'px';dpop.style.right='76px'}}};
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
+$('#accInfo').onclick=e=>{const b=e.currentTarget,t=$('#accTip'),o=t.hidden;t.hidden=!o;b.setAttribute('aria-expanded',o)};
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
 let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}

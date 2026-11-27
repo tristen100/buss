@@ -453,6 +453,10 @@ html.noglass .fpin{-webkit-backdrop-filter:none;backdrop-filter:none;background:
 .chip.add svg{color:var(--text-2)}
 .sg{margin-top:20px}
 .sg h3{margin:0 4px 8px;font-size:13px;font-weight:600;color:var(--text-3)}
+.sgh{display:flex;align-items:center;gap:4px}
+.sgi{width:26px;height:26px;margin:-6px 0;padding:4px;border:0;border-radius:50%;background:none;color:var(--text-3);cursor:pointer;display:grid;place-items:center}
+.sgi svg{width:18px;height:18px}.sgi[aria-expanded="true"]{color:var(--text);background:var(--fill,rgba(127,127,127,.14))}
+.sgtip{margin:0 4px 12px;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.45;color:var(--text-2);background:var(--fill,rgba(127,127,127,.12))}
 .sgd{margin:-2px 4px 10px;font-size:13px;line-height:1.45;color:var(--text-2)}
 .well{border-radius:20px;background:var(--well);padding:4px}
 .srow{display:flex;align-items:center;gap:12px;min-height:60px;padding:8px 10px}
