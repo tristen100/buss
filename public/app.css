@@ -451,8 +451,8 @@ html.noglass .fpin{-webkit-backdrop-filter:none;backdrop-filter:none;background:
 .chip.fc svg{color:var(--text-2)}
 .chip.add{padding:0 12px;color:var(--text-2)}
 .chip.add svg{color:var(--text-2)}
-.sg{margin-top:20px}
-.sg h3{margin:0 4px 8px;font-size:13px;font-weight:600;color:var(--text-3)}
+.sg{margin-top:28px}
+.sg h3{margin:0 4px 8px;font-size:18px;font-weight:700;letter-spacing:-.01em;color:var(--text)}
 .sgh{display:flex;align-items:center;gap:4px}
 .sgi{width:26px;height:26px;margin:-6px 0;padding:4px;border:0;border-radius:50%;background:none;color:var(--text-3);cursor:pointer;display:grid;place-items:center}
 .sgi svg{width:18px;height:18px}.sgi[aria-expanded="true"]{color:var(--text);background:var(--fill,rgba(127,127,127,.14))}
@@ -709,3 +709,9 @@ body.picking #map canvas{cursor:crosshair}
 .btn.sec{background:var(--well-2);color:var(--text)}
 .btn.sec.warn{color:var(--late,#e5484d)}
 .btn:disabled{opacity:.6}
+
+.pacetog{width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.pacetog .cv svg{transition:transform .3s var(--ease)}
+.pacetog[aria-expanded=true] .cv svg{transform:rotate(180deg)}
+#paceBody{border-top:1px solid var(--line,rgba(127,127,127,.18))}
+#appSug .pt b{white-space:normal;overflow:visible}

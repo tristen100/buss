@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=7a91c498">
+<link rel="stylesheet" href="app.css?v=a251b604">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
@@ -137,6 +137,8 @@
         <h3 id="sgPace">Kiirused</h3>
         <p class="sgd">Kõnd loeb igal teel. „Jõua kiiremini“ sörgib, kui aega on, ja jookseb, kui buss on kohe minemas.</p>
         <div class="well">
+          <button class="srow arow pacetog" id="paceTog" aria-expanded="false" aria-controls="paceBody"><span class="ico" data-i="walk"></span><span class="pt"><b>Kiirused ja varu</b><small id="paceSum"></small></span><span class="cv" data-i="chev"></span></button>
+          <div id="paceBody" hidden>
           <div class="srow pace" data-k="walk">
             <span class="ico" data-i="walk"></span>
             <div class="pt"><b>Kõndimine</b><small class="mpk"></small></div>
@@ -167,11 +169,12 @@
             <div class="pt"><b>Jooksu piir</b><small>kokku ühel teel</small></div>
             <div class="step"><button data-d="-1" aria-label="Vähem jooksu" data-i="minus"></button><output aria-live="polite"></output><button data-d="1" aria-label="Rohkem jooksu" data-i="plus"></button></div>
           </div>
-          <div class="pcmp" aria-label="Näide: 640 m">
-            <div class="pcap">640 m, näiteks Estonia peatusse</div>
+          <div class="pcmp">
+            <div class="pcap" id="pcap">640 m, näiteks Estonia peatusse</div>
             <div class="pb walk"><span>Kõnd</span><i></i><b></b></div>
             <div class="pb jog"><span>Sörk</span><i></i><b></b></div>
             <div class="pb run"><span>Jooks</span><i></i><b></b></div>
+          </div>
           </div>
         </div>
       </section>
@@ -208,13 +211,13 @@
       <section class="sg" aria-labelledby="sgApp">
         <h3 id="sgApp">Rakendus</h3>
         <div class="well">
-          <button class="srow arow" id="appSug"><span class="ico" data-i="chat"></span><span class="pt"><b>Soovita funktsiooni</b><small>Mis teeks rakenduse sulle paremaks?</small></span><span class="cv" data-i="chev"></span></button>
+          <button class="srow arow" id="appSug"><span class="ico" data-i="chat"></span><span class="pt"><b>Soovita funktsiooni või teavita veast</b><small>Mis teeks rakenduse paremaks või mis ei tööta?</small></span><span class="cv" data-i="chev"></span></button>
           <button class="srow arow" id="appInst"><span class="ico" data-i="install"></span><span class="pt"><b>Lisa avaekraanile</b><small>Avaneb nagu äpp, ühe puudutusega</small></span><span class="cv" data-i="chev"></span></button>
           <button class="srow arow" id="appTut"><span class="ico" data-i="info"></span><span class="pt"><b>Näita juhendit uuesti</b><small>Lühike ringkäik</small></span><span class="cv" data-i="chev"></span></button>
           <a class="srow arow" href="https://github.com/tristen100/buss" target="_blank" rel="noopener"><span class="ico" data-i="github"></span><span class="pt"><b>Lähtekood GitHubis</b><small>Avatud lähtekood, MIT litsents</small></span><span class="cv" data-i="ext"></span></a>
         </div>
       </section>
-      <p class="setfoot">buss.veebi.dev on tasuta ja ilma reklaamideta. Lemmikud ja seaded jäävad sinu seadmesse. Kasutajate loendamiseks saadan juhusliku seadme tunnuse, mitte asukohta. Andmed: transport.tallinn.ee ja peatus.ee (Regionaal- ja Põllumajandusministeerium). Aadressid: Maa-amet, Photon. Kaart © OpenStreetMap, OpenFreeMap. Tegi <a href="https://veebi.dev" target="_blank" rel="noopener">VeebiDev</a>.</p>
+      <p class="setfoot">buss.veebi.dev on tasuta ja ilma reklaamideta. Lemmikud ja seaded jäävad sinu seadmesse, kui sa kontot ei ava (konto andmed on krüpteeritud). Kasutajate loendamiseks saadan juhusliku seadme tunnuse, mitte asukohta. Andmed: transport.tallinn.ee ja peatus.ee (Regionaal- ja Põllumajandusministeerium). Aadressid: Maa-amet, Photon. Kaart © OpenStreetMap, OpenFreeMap. Tegi <a href="https://veebi.dev" target="_blank" rel="noopener">VeebiDev</a>.</p>
     </div>
 
     <div class="view" data-v="results">
@@ -249,10 +252,10 @@
 <div class="snack glass solidish" id="snack" role="status"><span></span><button>Võta tagasi</button></div>
 <div class="savesheet dlg glass solidish" id="sug" role="dialog" aria-modal="true" aria-labelledby="sugT">
   <button class="x" id="sugX" aria-label="Sulge" data-i="close"></button>
-  <h3 id="sugT">Soovita funktsiooni</h3>
-  <label class="fl"><span>Mida soovid?</span><textarea id="sugText" maxlength="1500" rows="5" placeholder="Näiteks: näita ka rongiaegu"></textarea></label>
+  <h3 id="sugT">Soovita funktsiooni või teavita veast</h3>
+  <label class="fl"><span>Mida soovid või mis ei tööta?</span><textarea id="sugText" maxlength="1500" rows="5" placeholder="Näiteks: näita ka rongiaegu, või: kaart ei liigu minuga kaasa"></textarea></label>
   <label class="fl"><span>Kontakt, kui tahad vastust</span><input id="sugContact" maxlength="120" autocomplete="email" placeholder="e-post, pole kohustuslik"></label>
-  <p class="dcap">Soovitus jõuab otse arendajani. Kaasa läheb ainult see tekst ja juhuslik seadme tunnus.</p>
+  <p class="dcap">Sõnum jõuab otse arendajani. Kaasa läheb ainult see tekst ja juhuslik seadme tunnus.</p>
   <div class="fa"><span></span><span></span><button class="btn pri sm" id="sugOk">Saada</button></div>
 </div>
 <div class="savesheet dlg glass solidish" id="inst" role="dialog" aria-modal="true" aria-labelledby="instT">
@@ -279,6 +282,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=90c0daa5"></script>
+<script type="module" src="app.js?v=372bb41d"></script>
 </body>
 </html>

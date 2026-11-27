@@ -1092,7 +1092,11 @@ function renderPace(){
   r.querySelector('output').innerHTML=k==='max'?`${v}<small>m</small>`:k[0]==='b'?`${kmh(v)}<small>min</small>`:`${kmh(v)}<small>km/h</small>`;
   if(k!=='max'&&k[0]!=='b')r.querySelector('.mpk').textContent=`${mss(3600/v)} min/km`;
   r.querySelector('[data-d="-1"]').disabled=v<=lo;r.querySelector('[data-d="1"]').disabled=v>=hi}
- const t={walk:640/state.pace.walk*3.6,jog:640/state.pace.jog*3.6,run:640/state.pace.run*3.6};
+ let D=640,cap='640 m, näiteks Estonia peatusse';
+ if(state.me&&RT){const st=RT.near(state.me,1500)[0];if(st){const d=Math.round(st[1]*DETOUR/10)*10;if(d>=60){D=d;cap=`${fmtM(d)} sinu lähimasse peatusse (${stopName(st[0])})`}}}
+ $('#pcap').textContent=cap;
+ $('#paceSum').textContent=`Kõnd ${kmh(state.pace.walk)} · sörk ${kmh(state.pace.jog)} · jooks ${kmh(state.pace.run)} km/h`;
+ const t={walk:D/state.pace.walk*3.6,jog:D/state.pace.jog*3.6,run:D/state.pace.run*3.6};
  for(const k in t){const b=$(`.pb.${k}`);b.querySelector('i').style.setProperty('--w',(t[k]/t.walk*100).toFixed(1)+'%');b.querySelector('b').textContent=mss(t[k])}
 }
 $$('.pace .step button').forEach(b=>b.onclick=()=>{const k=b.closest('.pace').dataset.k,[lo,hi]=paceRange(k);
@@ -1619,10 +1623,10 @@ $('#sugText').oninput=()=>LS.set('buss-sug-draft',$('#sugText').value);
 $('#sugX').onclick=()=>closeDlg('#sug');
 $('#sugOk').onclick=async()=>{
  const text=$('#sugText').value.trim(),contact=$('#sugContact').value.trim();
- if(text.length<3){toast('Kirjuta paar sõna, mida soovid');$('#sugText').focus();return}
+ if(text.length<3){toast('Kirjuta paar sõna');$('#sugText').focus();return}
  $('#sugOk').disabled=true;
  try{const r=await fetch(API+'suggest',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:DEV,text,contact,plat:PLAT,sa:standalone()?1:0})});if(!r.ok)throw 0;
-  LS.set('buss-sug-draft','');$('#sugText').value='';$('#sugContact').value='';closeDlg('#sug');toast('Aitäh! Soovitus jõudis arendajani.')}
+  LS.set('buss-sug-draft','');$('#sugText').value='';$('#sugContact').value='';closeDlg('#sug');toast('Aitäh! Sõnum jõudis arendajani.')}
  catch(e){$('#sugOk').disabled=false;toast('Ei saanud saata. Proovi hiljem uuesti.')}
 };
 
@@ -1713,6 +1717,7 @@ addEventListener('resize',()=>{if($('#tut').classList.contains('on'))setTimeout(
 
 /* ================= Rakendus rows in settings ================= */
 $('#appSug').onclick=openSuggest;
+$('#paceTog').onclick=e=>{const b=e.currentTarget,o=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',o);$('#paceBody').hidden=!o};
 $('#appInst').onclick=()=>openInstall(false);
 $('#appTut').onclick=()=>{closeSettings();setTimeout(startTut,RM?0:350)};
 $('#appInst').hidden=standalone();
