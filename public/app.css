@@ -805,4 +805,3 @@ body.picking #map canvas{cursor:crosshair}
 .damt.pop{background:var(--run);color:#fff}.damt.pop small{color:rgba(255,255,255,.8)}
 @media (prefers-reduced-motion:reduce){.damt{animation:none}}
 .dmon{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px 8px;font-weight:600;font-size:14px}
-.dman{display:block;margin-top:8px;font-size:12.5px;font-weight:600;color:var(--text-2);text-decoration:underline;text-underline-offset:2px}
