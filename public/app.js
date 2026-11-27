@@ -357,7 +357,9 @@ function favGroups(){
  if(!map)return;
  const it=FAVM.map((mm,i)=>{const p=map.project(mm.getLngLat()),b=mm.getElement().querySelector('.fpin');return{i,x:p.x,y:p.y,w:(b&&b.offsetWidth)||96}});
  let g=it.map(a=>[a]),merged=true;
- const near=(a,b)=>Math.abs(a.x-b.x)<(a.w+b.w)/2+6&&Math.abs(a.y-b.y)<42;
+ // pins already together need a bit more room before they split, so a slow pinch doesn't flip them back and forth
+ const was=new Map();FAVG.forEach((x,k)=>x._g.m&&x._g.m.forEach(i=>was.set(i,k)));
+ const near=(a,b)=>{const e=was.has(a.i)&&was.get(a.i)===was.get(b.i)?14:0;return Math.abs(a.x-b.x)<(a.w+b.w)/2+6+e&&Math.abs(a.y-b.y)<42+e};
  while(merged){merged=false;
   outer:for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++)if(g[i].some(a=>g[j].some(b=>near(a,b)))){g[i]=g[i].concat(g[j]);g.splice(j,1);merged=true;break outer}}
  g=g.filter(G=>G.length>1);
@@ -389,9 +391,12 @@ function favGroups(){
  old.forEach(x=>{const e=x.getElement(),M=x._g.m;let to=null;
   // a badge swallowed by another badge slides into it; one that splits just steps aside for its parts
   if(anim&&M){const ns=new Set([...M].map(newOf));if(ns.size===1){const n=[...ns][0];if(n&&n.src!==x)to=n}}
-  if(to){const q=P(x._g.ll);e.querySelectorAll('.fgrp,.fdot').forEach(k=>T(k,to.p.x-q.x,to.p.y-q.y));e.classList.add('gone','into')}
-  else e.classList.add('gone');
-  setTimeout(()=>x.remove(),anim?420:0)});
+  e.classList.add('gone');
+  if(!anim){x.remove();return}
+  // scripted, so MapLibre's own inline marker styles can't keep it on screen
+  const q=to&&P(x._g.ll),dx=to?to.p.x-q.x:0,dy=to?to.p.y-q.y:0;
+  e.querySelectorAll('.fgrp,.fdot').forEach(k=>{k.style.animation='none';k.animate([{opacity:1,transform:'translate(0,0) scale(1)'},{opacity:0,transform:`translate(${dx}px,${dy}px) scale(${to?.7:.4})`}],{duration:to?380:200,easing:'cubic-bezier(.32,.72,0,1)',fill:'forwards'})});
+  setTimeout(()=>x.remove(),420)});
  if(go.length){void document.body.offsetWidth;go.forEach(f=>f())}
 }
 function closeGroup(){if(!gPop)return;const p=gPop;gPop=null;$$('.fgrp[aria-expanded=true]').forEach(b=>b.setAttribute('aria-expanded',false));
