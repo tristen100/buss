@@ -811,3 +811,7 @@ body.picking #map canvas{cursor:crosshair}
 @media (prefers-reduced-motion:reduce){.damt{animation:none}}
 .dmon{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px 8px;font-weight:600;font-size:14px}
 .toast.big{--s:2.5;font-size:calc(13.5px * var(--s));padding:calc(11px * var(--s)) calc(16px * var(--s));overflow:hidden;letter-spacing:-.02em}
+.sgo{width:100%;margin:8px 0 4px;animation:popIn .45s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999);transition:transform .2s var(--spring),opacity .2s}
+.sgo[hidden]{display:none}.sgo:active{transform:scale(.97)}.sgo:disabled{opacity:.45;cursor:default}
+.sgo svg{width:18px;height:18px;color:var(--run)}
+@media (prefers-reduced-motion:reduce){.sgo{animation:none}}

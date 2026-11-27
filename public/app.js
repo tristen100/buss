@@ -828,9 +828,18 @@ function meRow(){
 }
 function setFrom(p){
  state.from=p;$('#fromIn').value=fromVal();$('#ftFrom').textContent=fromName();
- if(state.to&&!(p&&pkey(p)===pkey(state.to))){FIELD='to';$('#snote').innerHTML='';state.sel=null;freshLive();go('results',{fresh:true})}
- else{FIELD='to';$('#q').focus();renderPlaces()}
+ FIELD='to';$('#snote').innerHTML='';
+ // in search a pick only fills the field; "Otsi teed" starts the search
+ if(toReady()){$('#fromIn').blur();renderPlaces();goBtn();return}
+ $('#q').focus();renderPlaces();goBtn()
 }
+// the destination is chosen and its field still says so
+const toReady=()=>!!state.to&&$('#q').value.trim()===state.to.n;
+function goBtn(){const b=$('#sGo'),ok=toReady();b.hidden=!ok;if(!ok)return;
+ const same=state.from&&pkey(state.from)===pkey(state.to);b.disabled=!hasFrom()||same;
+ $('#sGoT').textContent=same?'Algus ja sihtkoht on samad':hasFrom()?'Otsi teed':'Vali, kust alustad'}
+function runSearch(){if(!toReady()||!hasFrom()||$('#sGo').disabled)return;$('#snote').innerHTML='';state.sel=null;ping('search');freshLive();go('results',{fresh:true});setTimeout(maybeInstall,8000)}
+$('#sGo').onclick=runSearch;
 function pickMe(){
  if(state.me){setFrom(null);return}
  $('#fromIn').value='Otsin asukohta…';
@@ -838,10 +847,14 @@ function pickMe(){
 }
 function pick(p){
  if(!p)return;
- if(FIELD==='from'){const r={n:p.n,s:p.s||'',ll:p.ll};const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift(r);RECENT.length=Math.min(RECENT.length,8);saveRecent();setFrom(r);return}
+ const inSearch=state.view==='search';
+ if(inSearch&&FIELD==='from'){const r={n:p.n,s:p.s||'',ll:p.ll};const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift(r);RECENT.length=Math.min(RECENT.length,8);saveRecent();setFrom(r);return}
  state.to={n:p.n,s:p.s||'',ll:p.ll};
  const i=RECENT.findIndex(x=>pkey(x)===pkey(p));if(i>=0)RECENT.splice(i,1);RECENT.unshift({n:p.n,s:p.s||'',ll:p.ll});RECENT.length=Math.min(RECENT.length,8);saveRecent();
  $('#ftTo').textContent=p.n;$('#snote').innerHTML='';state.sel=null;
+ // in search: fill the field and wait for "Otsi teed" (or pick the start next if there is none);
+ // favourites, recent chips and map pins outside search still go straight to the routes
+ if(inSearch){$('#q').value=p.n;if(!hasFrom()){FIELD='from';$('#fromIn').value='';$('#fromIn').focus()}else $('#q').blur();renderPlaces();goBtn();return}
  ping('search');freshLive();
  go('results',{fresh:true});
  setTimeout(maybeInstall,8000);
@@ -863,8 +876,8 @@ const pinPlace=(ll,r)=>({n:r&&r.n?r.n:'Kaardil valitud koht',s:r&&r.n?(r.s||'Kaa
 function dropPin(){if(pinMk){pinMk.remove();pinMk=null}}
 function usePin(field,p){
  dropPin();if(pop){pop.remove();pop=null}$('#snote').innerHTML='';
- if(field==='from'){state.from=p;if(state.to&&pkey(p)!==pkey(state.to)){state.sel=null;freshLive();go('results',{fresh:true})}else{go('search',{noFocus:!isDesk()});$('#q').value=state.to?state.to.n:''}}
- else{FIELD='to';pick(p)}
+ if(field==='from'){state.from=p;go('search',{noFocus:true});$('#q').value=state.to?state.to.n:'';renderPlaces();goBtn()}
+ else{go('search',{noFocus:true});FIELD='to';pick(p)}
 }
 function pinCard(ll){
  if(!map||!inArea(ll))return;
@@ -1475,7 +1488,7 @@ function go(v,o={}){
  if(pop){pop.remove();pop=null}
  if(v!=='results'&&v!=='route'&&v!=='settings')clearTimeout(refT);
  if(v==='home'){renderHome();setSheet(snapFor('home'),o.instant)}
- if(v==='search'){if(PICK)endPick();setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromVal();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
+ if(v==='search'){if(PICK)endPick();setSheet(snapFor('search'),o.instant);FIELD=o.field||'to';$('#fromIn').value=fromVal();if(o.field)$('#q').value=state.to?state.to.n:'';renderWhen($('#sWhen'),false);renderPlaces();goBtn();if(isDesk()||!o.noFocus)setTimeout(()=>{const f=FIELD==='from'?$('#fromIn'):$('#q');f.focus({preventScroll:true});if(FIELD==='from'||o.field)f.select()},RM?0:250)}
  if(v==='results'){setSheet(snapFor('results'),o.instant);
   if(o.fresh||!state.list.length){state.list=[];renderResults(true);if(map&&map.getSource('rt')){clearRoutes();clearTemp();LBL=[];keyVehicles();fitTo(bboxOf([fromLL(),state.to.ll]),15.6,o.instant)}
    setTimeout(()=>compute({fresh:true,first:true}),RM?0:60)}
@@ -1510,11 +1523,12 @@ $$('[data-run]').forEach(b=>b.onclick=()=>{
 });
 
 /* from and to: swap turns the trip around (your location becomes the destination) */
-function swap(){
+function swap(stay){
  if(!state.to||!hasFrom())return;
  const a=state.from||{n:fromName(),s:'',ll:fromLL(),me:1},b=state.to;
  state.from=b.me?null:b;state.to=a;
  $('#ftFrom').textContent=fromName();$('#ftTo').textContent=state.to.n;
+ if(stay){$('#fromIn').value=fromVal();$('#q').value=state.to.n;renderPlaces();goBtn();return}
  state.sel=null;freshLive();go('results',{fresh:true});
 }
 
@@ -1602,21 +1616,21 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-now]')){e.stopP
 $('#ftSwap').onclick=swap;
 // swap in search: turns the two fields around, also when one is still empty
 $('#sSwap').onclick=e=>{e.preventDefault();
- if(state.to&&hasFrom()){swap();return}
- if(state.to){state.from=state.to;state.to=null;$('#snote').innerHTML='';go('search',{noFocus:!isDesk()});$('#q').value='';return}
- if(state.from){state.to=state.from;state.from=null;$('#ftTo').textContent=state.to.n;state.sel=null;freshLive();go('results',{fresh:true})}
+ if(toReady()&&hasFrom()){swap(true);return}
+ if(toReady()){state.from=state.to;state.to=null;$('#snote').innerHTML='';go('search',{noFocus:!isDesk()});$('#q').value='';goBtn();return}
+ if(state.from){state.to=state.from;state.from=null;$('#ftTo').textContent=state.to.n;$('#fromIn').value=fromVal();$('#q').value=state.to.n;renderPlaces();goBtn()}
 };
 $('#ftFrom').parentNode.onclick=()=>go('search',{field:'from'});
 $('#ftTo').parentNode.onclick=()=>go('search',{field:'to'});
 $('#fromIn').addEventListener('focus',()=>{if(FIELD!=='from'){FIELD='from';renderPlaces()}$('#fromIn').select()});
 $('#fromIn').addEventListener('input',()=>{FIELD='from';$('#snote').innerHTML='';renderPlaces()});
-$('#fromIn').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
+$('#fromIn').addEventListener('keydown',e=>{if(e.key==='Enter'){if($('#fromIn').value===fromVal()&&toReady()){runSearch();return}const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
 $('#fromIn').addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==$('#fromIn')&&!$('#fromIn').value.trim())$('#fromIn').value=fromVal()},200));
 $('#q').addEventListener('focus',()=>{if(FIELD!=='to'){FIELD='to';if(!$('#fromIn').value.trim()||$('#fromIn').value!==fromVal())$('#fromIn').value=fromVal();renderPlaces()}});
-$('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces()});
-$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
+$('#q').addEventListener('input',()=>{$('#snote').innerHTML='';renderPlaces();goBtn()});
+$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){if(toReady()&&hasFrom()){runSearch();return}const f=$('#plist .place');if(f)f.click()}if(e.key==='Escape')go('home')});
 $('#fclr').onclick=e=>{e.preventDefault();$('#fromIn').value='';FIELD='from';renderPlaces();$('#fromIn').focus()};
-$('#qclr').onclick=e=>{e.preventDefault();$('#q').value='';renderPlaces();$('#q').focus()};
+$('#qclr').onclick=e=>{e.preventDefault();$('#q').value='';renderPlaces();goBtn();$('#q').focus()};
 $('#locate').onclick=()=>{setFollow(true);if(state.me&&map)map.easeTo({center:state.me,zoom:Math.max(map.getZoom(),16),padding:pad(),duration:RM?0:700});else locate(true)};
 
 /* ================= your location ================= */
