@@ -964,9 +964,11 @@ const PAY={once:{1:'5kQ9ATbiPdHBbuQa4FfjG08',3:'8x27sL72zbzteH2dgRfjG09',5:'28E3
 function renderPay(k){$('#dMonth').setAttribute('aria-checked',k==='month');
  $('#damts').innerHTML=Object.entries(PAY[k]).map(([v,id],i)=>`<a class="damt${v==='5'?' pop':''}" style="--d:${i}" href="https://buy.stripe.com/${id}" target="_blank" rel="noopener" data-v="${v}">${v} €${k==='month'?'<small>kuus</small>':''}</a>`).join('');}
 $('#dMonth').onclick=()=>renderPay($('#dMonth').getAttribute('aria-checked')==='true'?'once':'month');renderPay('once');
-if(/[?&]aitah=1/.test(location.search)){history.replaceState(null,'',location.pathname);setTimeout(()=>toast('Aitäh toetuse eest! ❤'),800)}
+if(/[?&]aitah=1/.test(location.search)){history.replaceState(null,'',location.pathname);setTimeout(()=>{toast('Aitäh toetuse eest! ❤',5000);const el=$('#toast');el.classList.add('big');
+  // 2.5x the normal size, smaller only as far as needed to stay on one line
+  for(let k=2.5;k>=1;k-=.05){el.style.setProperty('--s',k.toFixed(2));if(el.scrollWidth<=el.clientWidth+1)break}},800)}
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
-let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
+let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.remove('big');el.style.removeProperty('--s');el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');
 const resolveT=p=>p==='auto'?(mqDark.matches?'dark':'light'):p;
 function syncSeg(){
