@@ -747,3 +747,47 @@ body.picking #map canvas{cursor:crosshair}
 .favadd:not([hidden]){animation:dropIn .45s cubic-bezier(.32,.72,0,1)}
 .maplibregl-popup-content:has(.pcard){animation:popIn .55s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999);transform-origin:bottom center}
 @media (prefers-reduced-motion:reduce){.favadd:not([hidden]),.maplibregl-popup-content:has(.pcard){animation:none}}
+
+/* favourites grouped: one round badge with the count */
+.fpw .fpin,.fpw .fdot{transition:opacity .25s ease,transform .35s cubic-bezier(.34,1.56,.64,1)}
+.fpw.grouped .fpin,.fpw.grouped .fdot{opacity:0;transform:scale(.4);pointer-events:none}
+.fpw.gone{opacity:0;transition:opacity .2s ease}
+.fgrp{pointer-events:auto;display:flex;align-items:center;gap:6px;height:36px;padding:0 12px 0 5px;border-radius:var(--pill);border:0;background:var(--g-solid);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.22),inset 0 0 0 1px var(--g-edge);color:var(--text);font:inherit;cursor:pointer;
+ animation:popIn .5s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999);transform-origin:bottom center;transition:transform .25s var(--spring)}
+.fgrp:active{transform:scale(.94)}
+.fgrp b{font-size:14px;font-weight:700;min-width:8px}
+.fgi{display:flex}.fgi .fi{width:25px;height:25px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;box-shadow:0 0 0 2px var(--g-solid)}
+.fgi .fi+.fi{margin-left:-9px}.fgi .fi svg{width:14px;height:14px}
+.fgrp[aria-expanded=true]{background:var(--ink);color:var(--on-ink)}
+.gpop .maplibregl-popup-tip{display:none}
+.fglist{padding:6px;min-width:210px;transform-origin:bottom center;animation:popIn .5s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999)}
+.fglist.out{animation:none;opacity:0;transform:scale(.6) translateY(10px);filter:blur(4px);transition:opacity .2s ease,transform .22s cubic-bezier(.4,0,1,1),filter .2s ease}
+.fgo{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px 8px 6px;border:0;border-radius:14px;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer;
+ animation:dropIn .42s cubic-bezier(.32,.72,0,1) both;animation-delay:calc(var(--d)*45ms + 80ms)}
+.fgo:hover,.fgo:focus-visible{background:var(--well)}
+.fgo .fi{width:30px;height:30px;flex:none;border-radius:50%;background:var(--ink);color:var(--on-ink);display:grid;place-items:center}.fgo .fi svg{width:16px;height:16px}
+.fgo .pt b{display:block;font-size:14px}.fgo .pt small{font-size:12px}
+/* pick on map: the pin in the middle, the bar with the address and "Vali" */
+.pickbar{gap:8px;padding:6px;width:min(420px,calc(100% - 32px))}
+.pickbar .pbx{width:36px;height:36px;flex:none;border:0;border-radius:50%;background:var(--well);color:var(--text-2);display:grid;place-items:center;cursor:pointer}
+.pickbar .pbx svg{width:18px;height:18px}
+.pbt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.pbt small{font-size:11.5px;color:var(--text-3);font-weight:600}
+.pbt b{font-size:14px}
+.pbok{flex:none;height:36px;padding:0 18px;border:0;border-radius:var(--pill);background:var(--ink);color:var(--on-ink);font:inherit;font-weight:700;cursor:pointer;transition:transform .2s var(--spring),opacity .2s}
+.pbok:active{transform:scale(.95)}.pbok:disabled{opacity:.4}
+.pickbar:not([hidden]){animation:barIn .4s cubic-bezier(.32,.72,0,1)}
+@keyframes barIn{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(.96)}to{opacity:1;transform:translateX(-50%)}}
+@media (min-width:900px){.pickbar{left:calc(var(--panel-w) + 32px + (100% - var(--panel-w) - 32px)/2)}}
+.pickpin{position:fixed;left:0;top:0;z-index:35;width:0;height:0;touch-action:none}
+.pickpin[hidden]{display:none}
+.pickpin .mpin{position:absolute;left:-22px;top:-58px;width:44px;height:58px;clip-path:none;background:none;filter:none;cursor:grab;transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+.pickpin .mpin::before{content:'';position:absolute;left:9px;top:12px;width:26px;height:34px;background:var(--run);clip-path:path('M13 0C5.8 0 0 5.6 0 12.6 0 22 13 34 13 34S26 22 26 12.6C26 5.6 20.2 0 13 0Z');filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+.pickpin .mpin::after{left:17px;top:19px}
+.pickpin .pshadow{position:absolute;left:-6px;top:-3px;width:12px;height:5px;border-radius:50%;background:rgba(0,0,0,.35);filter:blur(1px);transition:transform .28s ease,opacity .28s ease}
+.pickpin.lift .mpin{transform:translateY(-10px) scale(1.18);cursor:grabbing}
+.pickpin.lift .pshadow{transform:scale(1.8);opacity:.55}
+.pickpin.drop .mpin{animation:pinDrop .55s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pinDrop{0%{transform:translateY(-40px);opacity:0}60%{opacity:1}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){.fgrp,.fglist,.fgo,.pickpin.drop .mpin,.pickbar:not([hidden]){animation:none}}
+.fgrp[aria-expanded=true] .fi{background:var(--on-ink);color:var(--ink);box-shadow:0 0 0 2px var(--ink)}

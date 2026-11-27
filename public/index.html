@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=f83985c4">
+<link rel="stylesheet" href="app.css?v=98d771ea">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
@@ -54,7 +54,8 @@
   <button class="setbtn glass" id="openSet" aria-label="Seaded" aria-expanded="false" data-i="gear"></button>
 </header>
 
-<div class="pickbar glass solidish" id="pickBar" hidden><span data-i="pin"></span><b></b><button class="pbx" id="pickX">Tühista</button></div>
+<div class="pickbar glass solidish" id="pickBar" hidden><button class="pbx" id="pickX" aria-label="Tühista" data-i="close"></button><span class="pbt"><small></small><b></b></span><button class="pbok" id="pickOk">Vali</button></div>
+<div class="pickpin" id="pickPin" hidden aria-label="Hoia ja lohista nõela"><div class="mpin"></div><i class="pshadow"></i></div>
 <div class="fabs">
   <button class="fab glass locate" id="locate" aria-label="Minu asukoht" data-i="locate"></button>
   <button class="fab glass donate" id="donate" aria-label="Toeta arendust" aria-expanded="false"><span data-i="heart"></span><span class="lbl">Toeta</span></button>
@@ -286,6 +287,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=380e4cf7"></script>
+<script type="module" src="app.js?v=fbd302c6"></script>
 </body>
 </html>

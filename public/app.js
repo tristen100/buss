@@ -342,11 +342,43 @@ function homeCam(instant){
  fitTo(bboxOf(pts),isDesk()?14.6:14.9,instant,{top:44,left:30,right:30});
 }
 
-let FAVM=[];
+let FAVM=[],FAVG=[],favGKey='',gPop=null,favGRaf=0;
 function renderFavPins(){
- if(!map)return;FAVM.forEach(x=>x.remove());FAVM=[];
+ if(!map)return;FAVM.forEach(x=>x.remove());FAVM=[];favGKey='-';
  FAVS.forEach(f=>{if(!f.ll)return;const el=h(`<div class="fpw"><button class="fpin" aria-label="${esc(f.n)}, ${esc(f.a)}. Näita teed"><span class="fi">${I[f.ic]}</span>${esc(f.n)}</button><i class="fdot"></i></div>`);
-  el.querySelector('.fpin').onclick=e=>{e.stopPropagation();pick(favPlace(f))};FAVM.push(mk(el,f.ll,'bottom',[0,5]))});
+  el.querySelector('.fpin').onclick=e=>{e.stopPropagation();pick(favPlace(f))};const mm=mk(el,f.ll,'bottom',[0,5]);mm._fav=f;FAVM.push(mm)});
+ favGroups();
+}
+/* favourites whose labels would overlap become one round badge with the count; tapping it fans out the list */
+function favGroups(){
+ if(!map)return;
+ const it=FAVM.map((mm,i)=>{const p=map.project(mm.getLngLat()),b=mm.getElement().querySelector('.fpin');return{i,x:p.x,y:p.y,w:(b&&b.offsetWidth)||96}});
+ let g=it.map(a=>[a]),merged=true;
+ const near=(a,b)=>Math.abs(a.x-b.x)<(a.w+b.w)/2+6&&Math.abs(a.y-b.y)<42;
+ while(merged){merged=false;
+  outer:for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++)if(g[i].some(a=>g[j].some(b=>near(a,b)))){g[i]=g[i].concat(g[j]);g.splice(j,1);merged=true;break outer}}
+ g=g.filter(G=>G.length>1);
+ const key=g.map(G=>G.map(a=>a.i).sort().join(',')).sort().join('|');
+ if(key===favGKey){FAVG.forEach(x=>{const G=x._g;if(G)x.setLngLat(G.ll)});return}
+ favGKey=key;closeGroup();
+ const old=FAVG;FAVG=[];
+ const inG=new Set(g.flat().map(a=>a.i));
+ FAVM.forEach((mm,i)=>mm.getElement().classList.toggle('grouped',inG.has(i)));
+ for(const G of g){
+  const fs=G.map(a=>FAVM[a.i]._fav),ll=[fs.reduce((t,f)=>t+f.ll[0],0)/fs.length,fs.reduce((t,f)=>t+f.ll[1],0)/fs.length];
+  const el=h(`<div class="fpw"><button class="fgrp" aria-label="${fs.length} lemmikut: ${esc(fs.map(f=>f.n).join(', '))}" aria-expanded="false"><span class="fgi">${fs.slice(0,3).map(f=>`<span class="fi">${I[f.ic]}</span>`).join('')}</span><b>${fs.length}</b></button><i class="fdot"></i></div>`);
+  el.querySelector('.fgrp').onclick=e=>{e.stopPropagation();openGroup(fs,ll,e.currentTarget)};
+  const mm=mk(el,ll,'bottom',[0,5]);mm._g={ll};FAVG.push(mm)}
+ old.forEach(x=>{const e=x.getElement();e.classList.add('gone');setTimeout(()=>x.remove(),RM?0:260)});
+}
+function closeGroup(){if(!gPop)return;const p=gPop;gPop=null;$$('.fgrp[aria-expanded=true]').forEach(b=>b.setAttribute('aria-expanded',false));
+ const c=p.getElement()&&p.getElement().querySelector('.fglist');if(c&&!RM){c.classList.add('out');setTimeout(()=>p.remove(),220)}else p.remove()}
+function openGroup(fs,ll,btn){
+ const again=gPop&&gPop._btn===btn;closeGroup();if(again)return;
+ const el=h(`<div class="vcard glass solidish fglist" role="menu">${fs.map((f,i)=>`<button class="fgo" role="menuitem" style="--d:${i}"><span class="fi">${I[f.ic]}</span><span class="pt"><b>${esc(f.n)}</b><small>${esc(f.a||'')}</small></span></button>`).join('')}</div>`);
+ el.querySelectorAll('.fgo').forEach((b,i)=>b.onclick=e=>{e.stopPropagation();closeGroup();pick(favPlace(fs[i]))});
+ btn.setAttribute('aria-expanded',true);
+ gPop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:[0,-46],className:'vpop gpop',maxWidth:'280px'}).setLngLat(ll).setDOMContent(el).addTo(map);gPop._btn=btn;
 }
 
 /* ---- markers: you, destination, labels ---- */
@@ -733,7 +765,7 @@ function renderPlaces(){
  const favs=FAVS.filter(f=>!q||has(f.n)||has(f.p));
  let h='';
  if(FIELD==='from'&&(!q||has('Sinu asukoht')))h+=meRow();
- if(!q)h+=`<div class="prow"><button class="place" data-map="1"><span class="pi">${I.pin}</span><span class="pn"><b>Vali kaardilt</b><small>Puuduta kaardil kohta</small></span></button></div>`;
+ if(!q)h+=`<div class="prow"><button class="place" data-map="1"><span class="pi">${I.pin}</span><span class="pn"><b>Vali kaardilt</b><small>Liiguta kaarti nõela alla</small></span></button></div>`;
  if(favs.length)h+='<div class="sect">Lemmikud</div>'+favs.map((f,i)=>row(favPlace(f),`<span class="pi fv">${I[f.ic]}</span>`,mark(f.n),f.a,q&&i===0)).join('');
  if(!q){
   const rest=RECENT.filter(p=>!favOf(p));
@@ -795,7 +827,7 @@ let pinMk=null,PICK=null,lpT=0,lpAt=null,pinAt=0;
 async function revName(ll){
  try{const ac=new AbortController(),t=setTimeout(()=>ac.abort(),2500);
   const j=await fetch(`https://photon.komoot.io/reverse?lat=${ll[1].toFixed(6)}&lon=${ll[0].toFixed(6)}&limit=1&lang=default`,{signal:ac.signal}).then(r=>r.json());clearTimeout(t);
-  const f=j.features&&j.features[0];if(!f||m(f.geometry.coordinates,ll)>80)return null;const q=f.properties,st=[q.street,q.housenumber].filter(Boolean).join(' ');
+  const f=j.features&&j.features[0];if(!f||m(f.geometry.coordinates,ll)>80)return null;const q=f.properties;if(q.name)q.name=q.name.replace(/^#\S*\s*\|\s*/,'').trim()||null;const st=[q.street,q.housenumber].filter(Boolean).join(' ');
   return{n:q.name||st||null,s:[q.name?st:'',q.district||q.city].filter(Boolean).join(', ')}}catch(e){return null}
 }
 const pinPlace=(ll,r)=>({n:r&&r.n?r.n:'Kaardil valitud koht',s:r&&r.n?(r.s||'Kaardilt'):`${ll[1].toFixed(5)}, ${ll[0].toFixed(5)}`,ll:[+ll[0].toFixed(6),+ll[1].toFixed(6)],pin:1});
@@ -816,22 +848,53 @@ function pinCard(ll){
  pop.on('close',()=>dropPin());
  revName(ll).then(r=>{if(!r||!r.n||!el.isConnected)return;p=pinPlace(ll,r);el.querySelector('.pnm').textContent=p.n;el.querySelector('.psub').textContent=p.s});
 }
-// "Vali kaardilt": the sheet steps down, the next tap on the map is the place
+// "Vali kaardilt": a pin stands in the middle of the visible map. Move the map under it, or hold the pin and drag it;
+// on release the map glides (0.45 s) so the pin is back in the middle. "Vali" takes the place under its tip.
+const pickPin=$('#pickPin');let pickRev=0,pickName=null;
+function visC(){const W=innerWidth,H=innerHeight;
+ if(isDesk()){const r=$('#sheet').getBoundingClientRect();return[(r.right+W)/2,H/2+10]}
+ const top=$('#pickBar').getBoundingClientRect().bottom||70,bot=H-minV()-8;return[W/2,(top+bot)/2+14]}
+function pinTo(x,y,ms){pickPin.style.transition=ms?`transform ${ms}ms cubic-bezier(.25,.1,.25,1)`:'none';pickPin.style.transform=`translate3d(${x}px,${y}px,0)`;pickPin._x=x;pickPin._y=y}
+function pickLL(){const r=$('#map').getBoundingClientRect(),c=map.unproject([pickPin._x-r.left,pickPin._y-r.top]);return[c.lng,c.lat]}
+function pickLabel(){if(!PICK)return;const ll=pickLL(),n=++pickRev;pickName=null;
+ const b=$('#pickBar').querySelector('b');if(!inArea(ll)){b.textContent='Vali koht Tallinna kandis';$('#pickOk').disabled=true;return}
+ $('#pickOk').disabled=false;b.textContent='…';
+ revName(ll).then(r=>{if(n!==pickRev||!PICK)return;pickName=r;b.textContent=r&&r.n?r.n:'Kaardil valitud koht'})}
+let pickLT=0;const pickLater=()=>{clearTimeout(pickLT);pickLT=setTimeout(pickLabel,350)};
 function pickOnMap(field){
- PICK=field;document.body.classList.add('picking');
- $('#pickBar').querySelector('b').textContent=field==='from'?'Puuduta kaarti: kust alustad':'Puuduta kaarti: kuhu lähed';
+ if(!map)return;PICK=field;document.body.classList.add('picking');closeGroup();if(pop){pop.remove();pop=null}
+ $('#pickBar').querySelector('small').textContent=field==='from'?'Kust alustad':'Kuhu lähed';
  $('#pickBar').hidden=false;document.activeElement&&document.activeElement.blur();
  if(!isDesk())setSheet(minV());
+ const place=()=>{const[x,y]=visC();pinTo(x,y,0)};place();setTimeout(place,RM?0:380);
+ pickPin.hidden=false;pickPin.classList.remove('drop');void pickPin.offsetWidth;pickPin.classList.add('drop');
+ setTimeout(pickLabel,RM?0:420);
 }
-function endPick(){PICK=null;document.body.classList.remove('picking');$('#pickBar').hidden=true}
+function endPick(){PICK=null;document.body.classList.remove('picking');$('#pickBar').hidden=true;pickPin.hidden=true;pickPin.classList.remove('lift','drop');clearTimeout(pickLT)}
 $('#pickX').onclick=()=>{endPick();go('search',{noFocus:true})};
-async function pickedAt(ll){
- const f=PICK;endPick();if(!inArea(ll)){toast('Vali koht Tallinna kandis');pickOnMap(f);return}
- pinMk=mk(h('<div class="mpin"></div>'),ll,'bottom');
- const r=await revName(ll);usePin(f,pinPlace(ll,r));
-}
+$('#pickOk').onclick=()=>{if(!PICK)return;const ll=pickLL(),f=PICK,r=pickName;endPick();if(!inArea(ll)){toast('Vali koht Tallinna kandis');pickOnMap(f);return}
+ pinMk=mk(h('<div class="mpin"></div>'),ll,'bottom');usePin(f,pinPlace(ll,r))};
+(()=>{let d=null;const LIFT=58;
+ const lift=()=>{if(!d||d.on)return;d.on=true;pickPin.classList.add('lift');navigator.vibrate&&navigator.vibrate(10);pinTo(d.x+d.ox,d.y+d.oy,160)};
+ pickPin.addEventListener('pointerdown',e=>{if(!PICK||e.button>0)return;e.preventDefault();e.stopPropagation();map.dragPan.disable();pickPin.setPointerCapture(e.pointerId);
+  d={id:e.pointerId,sx:e.clientX,sy:e.clientY,x:e.clientX,y:e.clientY,on:false,oy:e.pointerType==='touch'?-LIFT:pickPin._y-e.clientY,ox:e.pointerType==='touch'?0:pickPin._x-e.clientX};d.t=setTimeout(lift,200)});
+ pickPin.addEventListener('pointermove',e=>{if(!d||e.pointerId!==d.id)return;d.x=e.clientX;d.y=e.clientY;
+  if(!d.on&&Math.hypot(d.x-d.sx,d.y-d.sy)>6){clearTimeout(d.t);lift()}
+  if(d.on){pickPin.style.transition='none';pinTo(d.x+d.ox,d.y+d.oy,0)}});
+ const up=e=>{if(!d||e.pointerId!==d.id)return;clearTimeout(d.t);const was=d.on;d=null;map.dragPan.enable();pickPin.classList.remove('lift');if(!was)return;
+  const[vx,vy]=visC(),r=$('#map').getBoundingClientRect(),cx=r.width/2,cy=r.height/2,dx=pickPin._x-vx,dy=pickPin._y-vy;
+  const c=map.unproject([cx+dx,cy+dy]),T=RM?0:450;
+  map.easeTo({center:c,duration:T,easing:t=>1-Math.pow(1-t,3)});
+  pickPin.style.transition='none';requestAnimationFrame(()=>{pickPin.style.transition=T?`transform ${T}ms cubic-bezier(.33,1,.68,1)`:'none';pickPin.style.transform=`translate3d(${vx}px,${vy}px,0)`;pickPin._x=vx;pickPin._y=vy});
+  setTimeout(pickLabel,T+20)};
+ pickPin.addEventListener('pointerup',up);pickPin.addEventListener('pointercancel',up);
+})();
+addEventListener('resize',()=>{if(PICK){const[x,y]=visC();pinTo(x,y,0);pickLater()}});
 function mapPins(){
- map.on('click',e=>{if(PICK){pickedAt([e.lngLat.lng,e.lngLat.lat]);return}if(pinMk&&pop&&Date.now()-pinAt>500){pop.remove();pop=null}});
+ map.on('click',e=>{closeGroup();if(PICK)return;if(pinMk&&pop&&Date.now()-pinAt>500){pop.remove();pop=null}});
+ map.on('moveend',()=>{if(PICK)pickLater()});
+ map.on('move',()=>{if(favGRaf)return;favGRaf=requestAnimationFrame(()=>{favGRaf=0;favGroups()})});
+ map.on('zoomstart',closeGroup);
  map.on('contextmenu',e=>{e.preventDefault&&e.preventDefault();pinCard([e.lngLat.lng,e.lngLat.lat])});
  const stop=()=>{clearTimeout(lpT);lpT=0};
  map.on('touchstart',e=>{stop();const oe=e.originalEvent;if(!oe||oe.touches.length!==1||PICK)return;lpAt=e.point;const ll=[e.lngLat.lng,e.lngLat.lat];lpT=setTimeout(()=>{lpT=0;navigator.vibrate&&navigator.vibrate(12);pinCard(ll)},550)});
