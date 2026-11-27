@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=69e413c4">
+<link rel="stylesheet" href="app.css?v=18015450">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Kaart live-sõidukitega"></div>
@@ -65,13 +65,15 @@
   <button id="zout" aria-label="Vähenda" data-i="minus"></button>
 </div>
 
-<div class="dpop glass solidish" id="dpop" role="dialog" aria-label="Toeta arendust">
+<div class="dscrim" id="dscrim"></div>
+<div class="dpop glass solidish" id="dpop" role="dialog" aria-modal="true" aria-label="Toeta arendust">
   <button class="x" id="dclose" aria-label="Sulge" data-i="close"></button>
   <div class="hi" data-i="heart"></div>
   <h3>Toeta arendust</h3>
   <p>buss.veebi.dev on tasuta ja ilma reklaamideta.</p>
   <div class="damts" id="damts"></div>
   <div class="dmon"><span>Igakuine toetus</span><button class="tog" role="switch" aria-checked="false" id="dMonth" aria-label="Igakuine toetus"><span class="kn"></span></button></div>
+  <button class="btn pri dgo" id="dGo"><span data-i="heart"></span><span id="dGoT">Tee toetus</span></button>
   <span class="cap">Muu summa: vali ükskõik milline ja muuda kogust.</span>
 </div>
 
@@ -289,6 +291,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=f8d08d22"></script>
+<script type="module" src="app.js?v=944430af"></script>
 </body>
 </html>

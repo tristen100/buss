@@ -975,8 +975,12 @@ function renderWhen(el,inR){
 }
 $('#zin').onclick=()=>map&&map.zoomIn();$('#zout').onclick=()=>map&&map.zoomOut();
 const dpop=$('#dpop');
-$('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('open');dpop.classList.toggle('open',o);$('#donate').setAttribute('aria-expanded',o);if(o){lens();if(!isDesk()){dpop.style.top=($('#donate').getBoundingClientRect().top)+'px';dpop.style.right='76px'}}};
-$('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
+// a floating box in the middle; the scrim under it blurs and blocks the map, search and everything else
+function dOpen(o){dpop.classList.toggle('open',o);$('#dscrim').classList.toggle('open',o);$('#donate').setAttribute('aria-expanded',o);if(o){lens();setTimeout(()=>$('#dGo').focus({preventScroll:true}),60)}}
+$('#donate').onclick=e=>{e.stopPropagation();dOpen(!dpop.classList.contains('open'))};
+$('#dclose').onclick=()=>dOpen(false);
+$('#dscrim').onclick=()=>dOpen(false);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&dpop.classList.contains('open'))dOpen(false)});
 /* info pop-ups: one floating card that grows out of the (i) */
 let tipFor=null;const tipPop=$('#tipPop');
 function tipClose(){if(!tipFor)return;tipFor.setAttribute('aria-expanded',false);tipFor=null;tipPop.classList.remove('open')}
@@ -990,13 +994,18 @@ addEventListener('pointerdown',e=>{if(tipFor&&!tipPop.contains(e.target)&&!tipFo
 addEventListener('scroll',tipClose,true);addEventListener('resize',tipClose);addEventListener('keydown',e=>{if(e.key==='Escape')tipClose()});
 const PAY={once:{1:'5kQ9ATbiPdHBbuQa4FfjG08',3:'8x27sL72zbzteH2dgRfjG09',5:'28E3cv5YvgTNcyUekVfjG0a',10:'00wbJ1dqX6f99mIfoZfjG0b'},
  month:{1:'7sY9ATcmTeLF9mIdgRfjG04',3:'eVq5kDfz5471cyUekVfjG05',5:'28E8wP4UrgTNgPaa4FfjG06',10:'fZu8wP72z0UPcyUb8JfjG07'}};
+// picking an amount only selects it; "Tee toetus" opens Stripe
+let dAmt='5';
+const dKind=()=>$('#dMonth').getAttribute('aria-checked')==='true'?'month':'once',dLabel=()=>{$('#dGoT').textContent=`Tee toetus · ${dAmt} €${dKind()==='month'?' kuus':''}`};
 function renderPay(k){$('#dMonth').setAttribute('aria-checked',k==='month');
- $('#damts').innerHTML=Object.entries(PAY[k]).map(([v,id],i)=>`<a class="damt${v==='5'?' pop':''}" style="--d:${i}" href="https://buy.stripe.com/${id}" target="_blank" rel="noopener" data-v="${v}">${v} €${k==='month'?'<small>kuus</small>':''}</a>`).join('');}
+ $('#damts').innerHTML=Object.keys(PAY[k]).map((v,i)=>`<button class="damt${v===dAmt?' pop':''}" role="radio" aria-checked="${v===dAmt}" style="--d:${i}" data-v="${v}">${v} €${k==='month'?'<small>kuus</small>':''}</button>`).join('');dLabel()}
+$('#damts').onclick=e=>{const b=e.target.closest('.damt');if(!b)return;dAmt=b.dataset.v;
+ $$('#damts .damt').forEach(x=>{const on=x===b;x.classList.toggle('pop',on);x.setAttribute('aria-checked',on)});dLabel()};
+$('#dGo').onclick=()=>open('https://buy.stripe.com/'+PAY[dKind()][dAmt],'_blank','noopener');
 $('#dMonth').onclick=()=>renderPay($('#dMonth').getAttribute('aria-checked')==='true'?'once':'month');renderPay('once');
 if(/[?&]aitah=1/.test(location.search)){history.replaceState(null,'',location.pathname);setTimeout(()=>{toast('Aitäh toetuse eest! ❤',5000);const el=$('#toast');el.classList.add('big');
   // 2.5x the normal size, smaller only as far as needed to stay on one line
   for(let k=2.5;k>=1;k-=.05){el.style.setProperty('--s',k.toFixed(2));if(el.scrollWidth<=el.clientWidth+1)break}},800)}
-addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
 let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.remove('big');el.style.removeProperty('--s');el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');
 const resolveT=p=>p==='auto'?(mqDark.matches?'dark':'light'):p;
