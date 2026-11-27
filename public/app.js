@@ -143,10 +143,10 @@ function viewJ(j,ctx){
    legs.push({m:ln[1],n:ln[0],a:r.a,b:r.b,from:stopName(r.fromStop),at:stopName(r.toStop),dir:p.h,stops:r.i1-r.i0,raw:r,live:liveOf(r,ctx)});
   }else{
    const to=r.toStop!=null?stopName(r.toStop):null,fr=r.fromStop!=null?stopName(r.fromStop):null;
-   const t=r.eg?`${VERB.walk} sihtkohta`:fr&&fr===to?'Mine teise peatusse':`${VERB[r.m]||VERB.walk} ${to} peatusse`;
+   const t=r.eg?`${VERB.walk} sihtkohta`:fr&&fr===to?'Mine teise peatusesse':`${VERB[r.m]||VERB.walk} ${to} peatusse`;
    const dm=r.b-r.a;
    const L={m:r.m,a:r.a,b:r.b,t,s:`${Math.max(1,Math.round(dm))} min · ${fmtM(r.d)}`,d:r.d,raw:r,to};
-   if(r.m==='jog'||r.m==='run'){fastM+=r.d;if(!fastL||r.d>fastL.d)fastL=L;L.alt=`kõndides ${Math.max(1,Math.round(r.d/(state.pace.walk/3.6*60)))} min`}
+   if(r.m==='jog'||r.m==='run'){fastM+=r.d;if(!fastL||r.d>fastL.d)fastL=L;L.alt=r.m==='run'?'joostes':'sörkides'}
    if(dm>0.2||r.eg||i===0)legs.push(L);
   }
  });
