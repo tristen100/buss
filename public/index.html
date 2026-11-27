@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=98d771ea">
+<link rel="stylesheet" href="app.css?v=fbb8f6d4">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
@@ -69,9 +69,10 @@
   <button class="x" id="dclose" aria-label="Sulge" data-i="close"></button>
   <div class="hi" data-i="heart"></div>
   <h3>Toeta arendust</h3>
-  <p>buss.veebi.dev on tasuta ja ilma reklaamideta. Kui see aitas sul bussile jõuda, saad arendust toetada.</p>
-  <button class="btn pri" id="dgo"><span data-i="heart"></span>Toeta</button>
-  <span class="cap">Makseviis lisandub peagi</span>
+  <p>buss.veebi.dev on tasuta ja ilma reklaamideta.</p>
+  <div class="damts" id="damts"></div>
+  <div class="dmon"><span>Igakuine toetus</span><button class="tog" role="switch" aria-checked="false" id="dMonth" aria-label="Igakuine toetus"><span class="kn"></span></button></div>
+  <span class="cap">Muu summa: vali ükskõik milline ja muuda kogust.</span>
 </div>
 
 <!-- sheet / panel -->
@@ -287,6 +288,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=131cbf06"></script>
+<script type="module" src="app.js?v=120ffce4"></script>
 </body>
 </html>

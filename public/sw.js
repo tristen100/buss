@@ -1,5 +1,5 @@
 // Keeps the app shell and timetable for a fast start; live data always comes from the network.
-const C = "buss-131cbf06ff3c73a1e562b284";
+const C = "buss-120ffce4ff3c73a1e562b284";
 const SHELL = ["/", "/app.js", "/app.css", "/router.js", "/live.js", "/walk.js", "/data/tt.json", "/data/walk/index.json", "/data/walk/stops.json", "/data/shapes.json", "/manifest.webmanifest", "/icons/icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())); });

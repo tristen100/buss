@@ -959,7 +959,12 @@ function tipOpen(b){const t=document.getElementById(b.getAttribute('aria-control
 $$('.sgi').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();if(tipFor===b){tipClose();return}tipClose();tipOpen(b)});
 addEventListener('pointerdown',e=>{if(tipFor&&!tipPop.contains(e.target)&&!tipFor.contains(e.target))tipClose()},true);
 addEventListener('scroll',tipClose,true);addEventListener('resize',tipClose);addEventListener('keydown',e=>{if(e.key==='Escape')tipClose()});
-$('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
+const PAY={once:{1:'5kQ9ATbiPdHBbuQa4FfjG08',3:'8x27sL72zbzteH2dgRfjG09',5:'28E3cv5YvgTNcyUekVfjG0a',10:'00wbJ1dqX6f99mIfoZfjG0b'},
+ month:{1:'7sY9ATcmTeLF9mIdgRfjG04',3:'eVq5kDfz5471cyUekVfjG05',5:'28E8wP4UrgTNgPaa4FfjG06',10:'fZu8wP72z0UPcyUb8JfjG07'}};
+function renderPay(k){$('#dMonth').setAttribute('aria-checked',k==='month');
+ $('#damts').innerHTML=Object.entries(PAY[k]).map(([v,id],i)=>`<a class="damt${v==='5'?' pop':''}" style="--d:${i}" href="https://buy.stripe.com/${id}" target="_blank" rel="noopener" data-v="${v}">${v} €${k==='month'?'<small>kuus</small>':''}</a>`).join('');}
+$('#dMonth').onclick=()=>renderPay($('#dMonth').getAttribute('aria-checked')==='true'?'once':'month');renderPay('once');
+if(/[?&]aitah=1/.test(location.search)){history.replaceState(null,'',location.pathname);setTimeout(()=>toast('Aitäh toetuse eest! ❤'),800)}
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
 let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
 const mqDark=matchMedia('(prefers-color-scheme: dark)');

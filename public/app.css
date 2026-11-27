@@ -791,3 +791,17 @@ body.picking #map canvas{cursor:crosshair}
 @keyframes pinDrop{0%{transform:translateY(-40px);opacity:0}60%{opacity:1}100%{transform:none}}
 @media (prefers-reduced-motion:reduce){.fgrp,.fglist,.fgo,.pickpin.drop .mpin,.pickbar:not([hidden]){animation:none}}
 .fgrp[aria-expanded=true] .fi{background:var(--on-ink);color:var(--ink);box-shadow:0 0 0 2px var(--ink)}
+
+/* Toeta: once or monthly, four amounts that open Stripe */
+.dseg{position:relative;display:grid;grid-template-columns:1fr 1fr;padding:3px;border-radius:var(--pill);background:var(--well-2);margin-bottom:10px}
+.dseg .cell{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:var(--pill);background:var(--knob);box-shadow:0 2px 8px rgba(0,0,0,.16);transition:transform .45s cubic-bezier(.34,1.3,.64,1)}
+.dseg[data-k=month] .cell{transform:translateX(100%)}
+.dseg button{position:relative;z-index:1;height:36px;border:0;background:none;font:inherit;font-weight:600;font-size:13.5px;color:var(--text-2);cursor:pointer;transition:color .25s}
+.dseg button[aria-checked=true]{color:var(--text)}
+.damts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.damt{display:flex;flex-direction:column;align-items:center;justify-content:center;height:54px;border-radius:16px;background:var(--well);color:var(--text);font-weight:700;font-size:17px;text-decoration:none;transition:transform .25s var(--spring),background .2s;animation:dropIn .4s cubic-bezier(.32,.72,0,1) both;animation-delay:calc(var(--d)*40ms)}
+.damt small{font-size:10.5px;font-weight:600;color:var(--text-3);margin-top:1px}
+.damt:hover{background:var(--well-2)}.damt:active{transform:scale(.94)}
+.damt.pop{background:var(--run);color:#fff}.damt.pop small{color:rgba(255,255,255,.8)}
+@media (prefers-reduced-motion:reduce){.damt{animation:none}}
+.dmon{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px 8px;font-weight:600;font-size:14px}
