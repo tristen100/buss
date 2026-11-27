@@ -343,14 +343,16 @@ function homeCam(instant){
  fitTo(bboxOf(pts),isDesk()?14.6:14.9,instant,{top:44,left:30,right:30});
 }
 
-let FAVM=[],FAVG=[],favGKey='',gPop=null,favGRaf=0;
+let FAVM=[],FAVG=[],favGKey='',gPop=null,favGRaf=0,favNoAnim=false;
 function renderFavPins(){
- if(!map)return;FAVM.forEach(x=>x.remove());FAVM=[];favGKey='-';
+ if(!map)return;FAVM.forEach(x=>x.remove());FAVM=[];favGKey='-';favNoAnim=true;FAVG.forEach(x=>x._g.m=null);
  FAVS.forEach(f=>{if(!f.ll)return;const el=h(`<div class="fpw"><button class="fpin" aria-label="${esc(f.n)}, ${esc(f.a)}. Näita teed"><span class="fi">${I[f.ic]}</span>${esc(f.n)}</button><i class="fdot"></i></div>`);
   el.querySelector('.fpin').onclick=e=>{e.stopPropagation();pick(favPlace(f))};const mm=mk(el,f.ll,'bottom',[0,5]);mm._fav=f;FAVM.push(mm)});
  favGroups();
 }
-/* favourites whose labels would overlap become one round badge with the count; tapping it fans out the list */
+/* favourites whose labels would overlap become one round badge with the count; tapping it fans out the list.
+   Zooming out, pins slide into the badge; zooming in, the badge lets them go: they slide out from it to their own
+   places (a group that only loses some keeps going as a smaller badge and splits later). */
 function favGroups(){
  if(!map)return;
  const it=FAVM.map((mm,i)=>{const p=map.project(mm.getLngLat()),b=mm.getElement().querySelector('.fpin');return{i,x:p.x,y:p.y,w:(b&&b.offsetWidth)||96}});
@@ -362,15 +364,35 @@ function favGroups(){
  const key=g.map(G=>G.map(a=>a.i).sort().join(',')).sort().join('|');
  if(key===favGKey){FAVG.forEach(x=>{const G=x._g;if(G)x.setLngLat(G.ll)});return}
  favGKey=key;closeGroup();
+ const anim=!RM&&!favNoAnim;favNoAnim=false;
  const old=FAVG;FAVG=[];
- const inG=new Set(g.flat().map(a=>a.i));
- FAVM.forEach((mm,i)=>mm.getElement().classList.toggle('grouped',inG.has(i)));
- for(const G of g){
-  const fs=G.map(a=>FAVM[a.i]._fav),ll=[fs.reduce((t,f)=>t+f.ll[0],0)/fs.length,fs.reduce((t,f)=>t+f.ll[1],0)/fs.length];
+ const P=ll=>map.project(ll),T=(k,x,y)=>k.style.translate=x||y?`${x}px ${y}px`:'',go=[];
+ const from=(kids,x,y)=>{kids.forEach(k=>{k.style.transition='none';T(k,x,y)});go.push(()=>kids.forEach(k=>{k.style.transition='';T(k,0,0)}))};
+ const NG=g.map(G=>{const fs=G.map(a=>FAVM[a.i]._fav),ll=[fs.reduce((t,f)=>t+f.ll[0],0)/fs.length,fs.reduce((t,f)=>t+f.ll[1],0)/fs.length],m=new Set(G.map(a=>a.i));
+  // the old badge that holds most of these: the new one comes out of it
+  let src=null,best=0;for(const x of old){const c=x._g.m?[...x._g.m].filter(i=>m.has(i)).length:0;if(c>best){best=c;src=x}}
+  return{fs,ll,m,p:P(ll),src}});
+ const newOf=i=>NG.find(n=>n.m.has(i)),oldOf=i=>old.find(x=>x._g.m&&x._g.m.has(i));
+ FAVM.forEach((mm,i)=>{const e=mm.getElement(),kids=[...e.querySelectorAll('.fpin,.fdot')],p=P(mm.getLngLat()),N=newOf(i),was=e.classList.contains('grouped');
+  if(N){if(anim&&!was)kids.forEach(k=>T(k,N.p.x-p.x,N.p.y-p.y));e.classList.add('grouped');return}
+  if(!was)return;
+  const O=oldOf(i);
+  if(anim&&O){const q=P(O._g.ll);from(kids,q.x-p.x,q.y-p.y);go.push(()=>e.classList.remove('grouped'))}
+  else{kids.forEach(k=>T(k,0,0));e.classList.remove('grouped')}
+ });
+ for(const n of NG){const{fs,ll}=n;
   const el=h(`<div class="fpw"><button class="fgrp" aria-label="${fs.length} lemmikut: ${esc(fs.map(f=>f.n).join(', '))}" aria-expanded="false"><span class="fgi">${fs.slice(0,3).map(f=>`<span class="fi">${I[f.ic]}</span>`).join('')}</span><b>${fs.length}</b></button><i class="fdot"></i></div>`);
   el.querySelector('.fgrp').onclick=e=>{e.stopPropagation();openGroup(fs,ll,e.currentTarget)};
-  const mm=mk(el,ll,'bottom',[0,5]);mm._g={ll};FAVG.push(mm)}
- old.forEach(x=>{const e=x.getElement();e.classList.add('gone');setTimeout(()=>x.remove(),RM?0:260)});
+  const mm=mk(el,ll,'bottom',[0,5]);mm._g={ll,m:n.m};FAVG.push(mm);
+  if(anim&&n.src){const q=P(n.src._g.ll);el.classList.add('moved');from([el.querySelector('.fgrp'),el.querySelector('.fdot')],q.x-n.p.x,q.y-n.p.y)}
+  else if(anim)el.classList.add('fresh')}
+ old.forEach(x=>{const e=x.getElement(),M=x._g.m;let to=null;
+  // a badge swallowed by another badge slides into it; one that splits just steps aside for its parts
+  if(anim&&M){const ns=new Set([...M].map(newOf));if(ns.size===1){const n=[...ns][0];if(n&&n.src!==x)to=n}}
+  if(to){const q=P(x._g.ll);e.querySelectorAll('.fgrp,.fdot').forEach(k=>T(k,to.p.x-q.x,to.p.y-q.y));e.classList.add('gone','into')}
+  else e.classList.add('gone');
+  setTimeout(()=>x.remove(),anim?420:0)});
+ if(go.length){void document.body.offsetWidth;go.forEach(f=>f())}
 }
 function closeGroup(){if(!gPop)return;const p=gPop;gPop=null;$$('.fgrp[aria-expanded=true]').forEach(b=>b.setAttribute('aria-expanded',false));
  const c=p.getElement()&&p.getElement().querySelector('.fglist');if(c&&!RM){c.classList.add('out');setTimeout(()=>p.remove(),220)}else p.remove()}

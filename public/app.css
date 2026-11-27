@@ -749,9 +749,13 @@ body.picking #map canvas{cursor:crosshair}
 @media (prefers-reduced-motion:reduce){.favadd:not([hidden]),.maplibregl-popup-content:has(.pcard){animation:none}}
 
 /* favourites grouped: one round badge with the count */
-.fpw .fpin,.fpw .fdot{transition:opacity .25s ease,transform .35s cubic-bezier(.34,1.56,.64,1)}
-.fpw.grouped .fpin,.fpw.grouped .fdot{opacity:0;transform:scale(.4);pointer-events:none}
-.fpw.gone{opacity:0;transition:opacity .2s ease}
+.fpw .fpin,.fpw .fdot{transition:opacity .25s ease,transform .35s cubic-bezier(.34,1.56,.64,1),translate .42s cubic-bezier(.32,.72,0,1)}
+.fpw.grouped .fpin,.fpw.grouped .fdot{opacity:0;transform:scale(.4);pointer-events:none;transition:opacity .3s ease .08s,transform .4s cubic-bezier(.32,.72,0,1),translate .4s cubic-bezier(.32,.72,0,1)}
+.fpw.gone{opacity:0;transition:opacity .12s ease;pointer-events:none}
+.fpw.gone.into{transition:opacity .25s ease .15s}
+.fpw .fgrp,.fpw.fresh .fdot,.fpw.moved .fdot{transition:transform .25s var(--spring),translate .42s cubic-bezier(.32,.72,0,1)}
+.fpw.moved .fgrp{animation:none}
+.fpw.fresh .fgrp{animation-delay:.14s;animation-fill-mode:both}
 .fgrp{pointer-events:auto;display:flex;align-items:center;gap:6px;height:36px;padding:0 12px 0 5px;border-radius:var(--pill);border:0;background:var(--g-solid);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.22),inset 0 0 0 1px var(--g-edge);color:var(--text);font:inherit;cursor:pointer;
  animation:popIn .5s linear(0,.029 2.2%,.11 4.6%,.237 7.3%,.538 13.1%,.778 19.2%,.94 26.5%,1.022 36.3%,1.035 42.6%,1.014 62.3%,.999);transform-origin:bottom center;transition:transform .25s var(--spring)}
 .fgrp:active{transform:scale(.94)}
