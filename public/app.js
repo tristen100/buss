@@ -886,7 +886,7 @@ $('#zin').onclick=()=>map&&map.zoomIn();$('#zout').onclick=()=>map&&map.zoomOut(
 const dpop=$('#dpop');
 $('#donate').onclick=e=>{e.stopPropagation();const o=!dpop.classList.contains('open');dpop.classList.toggle('open',o);$('#donate').setAttribute('aria-expanded',o);if(o){lens();if(!isDesk()){dpop.style.top=($('#donate').getBoundingClientRect().top)+'px';dpop.style.right='76px'}}};
 $('#dclose').onclick=()=>{dpop.classList.remove('open');$('#donate').setAttribute('aria-expanded',false)};
-$('#accInfo').onclick=e=>{const b=e.currentTarget,t=$('#accTip'),o=t.hidden;t.hidden=!o;b.setAttribute('aria-expanded',o)};
+$$('.sgi').forEach(b=>b.onclick=e=>{e.preventDefault();const t=document.getElementById(b.getAttribute('aria-controls')),o=t.hidden;t.hidden=!o;b.setAttribute('aria-expanded',o)});
 $('#dgo').onclick=()=>{dpop.classList.remove('open');toast('Aitäh! Makseviis lisandub peagi.')};
 addEventListener('click',e=>{if(dpop.classList.contains('open')&&!dpop.contains(e.target)&&!$('#donate').contains(e.target))$('#dclose').click()});
 let tt;function toast(t,ms){const el=$('#toast');el.textContent=t;el.classList.toggle('long',t.length>60);el.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('on'),ms||Math.max(2200,t.length*55))}
@@ -1729,12 +1729,13 @@ acctPull();
 loadData().then(()=>{loadNotes();if(ALARM)tickAlarm();renderHome();if(state.to)go(state.view)}).catch(()=>{$('#nearSub').textContent='Sõiduplaani ei saanud laadida';toast('Sõiduplaani ei saanud laadida. Kontrolli internetiühendust.')});
 if(window.maplibregl)initMap();else{$('#maploading').textContent='Kaarti ei saanud laadida. Kontrolli internetiühendust.'}
 document.fonts&&document.fonts.ready.then(()=>lens(true));
-/* location: used at once when allowed; asked on every visit until it is allowed or blocked (the tutorial asks on its last step) */
-(async()=>{let st='prompt';if(iosApp()){if(LS.get('buss-loc')==='1')locate(false);return}try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
+/* no tutorial on first open (it lives in Seaded > Näita juhendit); location is asked at once */
+if(LS.get('buss-tut')!=='1')LS.set('buss-tut','1');
+/* location: used at once when allowed; asked on every visit until it is allowed or blocked */
+(async()=>{let st='prompt';if(iosApp()){if(LS.get('buss-loc')==='1'||!LS.get('buss-locasked')){LS.set('buss-locasked','1');locate(false)}return}try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
  if(st==='granted')locate(false);else if(st==='prompt'&&LS.get('buss-tut')==='1')setTimeout(()=>locate(false),700)})();
 ping('open');
-if(LS.get('buss-tut')!=='1')setTimeout(startTut,RM?200:900);
-else{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
+{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
 window.BUSS={get map(){return map},state,ROUTES,get RT(){return RT},MOV,get VEHS(){return VEHS}}; // for tests in the browser console
 // for the headless tests only (?debug): no effect otherwise

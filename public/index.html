@@ -28,7 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<link rel="stylesheet" href="app.css?v=a251b604">
+<link rel="stylesheet" href="app.css?v=8b52ae84">
 </head>
 <body data-view="home">
 <div id="map" role="application" aria-label="Tallinna kaart live-sõidukitega"></div>
@@ -183,9 +183,10 @@
         <h3 id="sgLines">Liinid</h3>
         <div class="well">
           <div class="srow">
-            <div class="pt"><b>Maakonnabussid Tallinnas</b><small>Väljas ei pakuta maakonnabussi sõiduks ühest Tallinna peatusest teise. Linnast välja ja linna sõites on need alati olemas.</small></div>
+            <div class="pt"><b class="sgh">Maakonnabussid Tallinnas<button class="sgi" aria-label="Mida see teeb" aria-expanded="false" aria-controls="regTip" data-i="info"></button></b></div>
             <button class="tog" role="switch" aria-checked="false" id="regTog" aria-label="Maakonnabussid Tallinnas"><span class="kn"></span></button>
           </div>
+          <div class="sgtip in" id="regTip" hidden>Väljas ei pakuta maakonnabussi sõiduks ühest Tallinna peatusest teise. Linnast välja ja linna sõites on need alati olemas.</div>
         </div>
       </section>
 
@@ -203,7 +204,7 @@
             <div class="segcap" id="segcap"></div>
           </div>
           <div class="srow">
-            <div class="pt"><b>Vedel klaas</b><small>Paneelid murravad kaarti nagu paks klaas. Väljas on pinnad ühtlased ja vanem telefon töötab sujuvamalt.</small></div>
+            <div class="pt"><b>Vedel klaas</b></div>
             <button class="tog" role="switch" aria-checked="true" id="glassTog" aria-label="Vedel klaas"><span class="kn"></span></button>
           </div>
         </div>
@@ -213,11 +214,11 @@
         <div class="well">
           <button class="srow arow" id="appSug"><span class="ico" data-i="chat"></span><span class="pt"><b>Soovita funktsiooni või teavita veast</b><small>Mis teeks rakenduse paremaks või mis ei tööta?</small></span><span class="cv" data-i="chev"></span></button>
           <button class="srow arow" id="appInst"><span class="ico" data-i="install"></span><span class="pt"><b>Lisa avaekraanile</b><small>Avaneb nagu äpp, ühe puudutusega</small></span><span class="cv" data-i="chev"></span></button>
-          <button class="srow arow" id="appTut"><span class="ico" data-i="info"></span><span class="pt"><b>Näita juhendit uuesti</b><small>Lühike ringkäik</small></span><span class="cv" data-i="chev"></span></button>
+          <button class="srow arow" id="appTut"><span class="ico" data-i="info"></span><span class="pt"><b>Näita juhendit</b><small>Lühike ringkäik</small></span><span class="cv" data-i="chev"></span></button>
           <a class="srow arow" href="https://github.com/tristen100/buss" target="_blank" rel="noopener"><span class="ico" data-i="github"></span><span class="pt"><b>Lähtekood GitHubis</b><small>Avatud lähtekood, MIT litsents</small></span><span class="cv" data-i="ext"></span></a>
         </div>
       </section>
-      <p class="setfoot">buss.veebi.dev on tasuta ja ilma reklaamideta. Lemmikud ja seaded jäävad sinu seadmesse, kui sa kontot ei ava (konto andmed on krüpteeritud). Kasutajate loendamiseks saadan juhusliku seadme tunnuse, mitte asukohta. Andmed: transport.tallinn.ee ja peatus.ee (Regionaal- ja Põllumajandusministeerium). Aadressid: Maa-amet, Photon. Kaart © OpenStreetMap, OpenFreeMap. Tegi <a href="https://veebi.dev" target="_blank" rel="noopener">VeebiDev</a>.</p>
+      <details class="setfoot"><summary>Info ja andmeallikad<span data-i="chev"></span></summary><p>buss.veebi.dev on tasuta ja ilma reklaamideta. Lemmikud ja seaded jäävad sinu seadmesse, kui sa kontot ei ava (konto andmed on krüpteeritud). Kasutajate loendamiseks saadan juhusliku seadme tunnuse, mitte asukohta. Andmed: transport.tallinn.ee ja peatus.ee (Regionaal- ja Põllumajandusministeerium). Aadressid: Maa-amet, Photon. Kaart © OpenStreetMap, OpenFreeMap. Tegi <a href="https://veebi.dev" target="_blank" rel="noopener">VeebiDev</a>.</p></details>
     </div>
 
     <div class="view" data-v="results">
@@ -282,6 +283,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=372bb41d"></script>
+<script type="module" src="app.js?v=9c9b8e50"></script>
 </body>
 </html>

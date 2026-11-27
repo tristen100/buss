@@ -715,3 +715,10 @@ body.picking #map canvas{cursor:crosshair}
 .pacetog[aria-expanded=true] .cv svg{transform:rotate(180deg)}
 #paceBody{border-top:1px solid var(--line,rgba(127,127,127,.18))}
 #appSug .pt b{white-space:normal;overflow:visible}
+.sgtip.in{margin:0 10px 10px}
+.pt b.sgh{display:flex}
+details.setfoot summary{list-style:none;display:flex;align-items:center;gap:4px;cursor:pointer;padding:6px 0;font-size:13px;font-weight:600;color:var(--text-2)}
+details.setfoot summary::-webkit-details-marker{display:none}
+details.setfoot summary span{display:grid;width:16px;height:16px}details.setfoot summary svg{width:16px;height:16px;transition:transform .3s var(--ease)}
+details.setfoot[open] summary svg{transform:rotate(180deg)}
+details.setfoot p{margin:6px 0 0}
