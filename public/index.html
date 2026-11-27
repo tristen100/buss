@@ -136,8 +136,8 @@
       </section>
 
       <section class="sg" aria-labelledby="sgPace">
-        <h3 id="sgPace">Kiirused</h3>
-        <p class="sgd">Kõnd loeb igal teel. „Jõua kiiremini“ sörgib, kui aega on, ja jookseb, kui buss on kohe minemas.</p>
+        <h3 id="sgPace" class="sgh">Kiirused<button class="sgi" aria-label="Mida kiirused teevad" aria-expanded="false" aria-controls="paceTip" data-i="info"></button></h3>
+        <template id="paceTip">Kõnd loeb igal teel. „Jõua kiiremini“ sörgib, kui aega on, ja jookseb, kui buss on kohe minemas.</template>
         <div class="well">
           <button class="srow arow pacetog" id="paceTog" aria-expanded="false" aria-controls="paceBody"><span class="ico" data-i="walk"></span><span class="pt"><b>Kiirused ja varu</b><small id="paceSum"></small></span><span class="cv" data-i="chev"></span></button>
           <div id="paceBody" class="fold"><div class="foldin">
@@ -188,7 +188,7 @@
             <div class="pt"><b class="sgh">Maakonnabussid Tallinnas<button class="sgi" aria-label="Mida see teeb" aria-expanded="false" aria-controls="regTip" data-i="info"></button></b></div>
             <button class="tog" role="switch" aria-checked="false" id="regTog" aria-label="Maakonnabussid Tallinnas"><span class="kn"></span></button>
           </div>
-          <template id="regTip">Väljas ei pakuta maakonnabussi sõiduks ühest Tallinna peatusest teise. Linnast välja ja linna sõites on need alati olemas.</template>
+          <template id="regTip">Ei pakuta maakonnabussi sõiduks ühest Tallinna peatusest teise. Linnast välja ja linna sõites on need alati olemas.</template>
         </div>
       </section>
 
@@ -286,6 +286,6 @@
     <div class="tfoot"><div class="tdots" id="tutDots"></div><button class="tskip" id="tutSkip">Jäta vahele</button><button class="btn pri sm" id="tutNext">Edasi</button></div>
   </div>
 </div>
-<script type="module" src="app.js?v=4e2b545c"></script>
+<script type="module" src="app.js?v=380e4cf7"></script>
 </body>
 </html>

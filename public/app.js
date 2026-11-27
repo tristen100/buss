@@ -1652,6 +1652,8 @@ function installSteps(){
   if(/CriOS/.test(UA))return L([`Vajuta aadressiribal jagamisnuppu ${sh}`,'Vali „Lisa avakuvale“','Vajuta „Lisa“'],[`Tap the share button ${sh} in the address bar`,'Choose “Add to Home Screen”','Tap “Add”']);
   if(/FxiOS/.test(UA))return L(['Vajuta all menüünuppu <span class="ki">☰</span>','Vali „Jaga“','Vali „Lisa avakuvale“'],['Tap the menu button <span class="ki">☰</span>','Choose “Share”','Choose “Add to Home Screen”']);
   if(/EdgiOS/.test(UA))return L(['Vajuta all menüünuppu <span class="ki">⋯</span>','Vali „Lisa telefoni“'],['Tap the menu button <span class="ki">⋯</span> at the bottom','Choose “Add to phone”']);
+   const sv=+((UA.match(/Version\/(\d+)/)||[])[1]||0);
+  if(sv>=26&&!pad)return L(['Vajuta all paremal nuppu <span class="ki">⋯</span>',`Vali „Jaga“ ${sh}`,'Keri alla ja vali „Lisa avakuvale“','Vajuta „Lisa“'],['Tap the <span class="ki">⋯</span> button at the bottom right',`Choose “Share” ${sh}`,'Scroll down and choose “Add to Home Screen”','Tap “Add”']);
   return L([`Vajuta ${pad?'üleval':'all'} jagamisnuppu ${sh}`,'Keri alla ja vali „Lisa avakuvale“','Vajuta „Lisa“'],[`Tap the share button ${sh} at the ${pad?'top':'bottom'}`,'Scroll down and choose “Add to Home Screen”','Tap “Add”']);
  }
  if(isAndroid){
@@ -1748,7 +1750,7 @@ if(LS.get('buss-tut')!=='1')LS.set('buss-tut','1');
 (async()=>{let st='prompt';if(iosApp()){if(LS.get('buss-loc')==='1'||!LS.get('buss-locasked')){LS.set('buss-locasked','1');locate(false)}return}try{const p=navigator.permissions&&await navigator.permissions.query({name:'geolocation'});if(p){st=p.state;LOCST=st;p.onchange=()=>{LOCST=p.state;if(p.state==='granted')locate(false);if(state.view==='search')renderPlaces()}}else if(LS.get('buss-loc')==='1')st='granted'}catch(e){}
  if(st==='granted')locate(false);else if(st==='prompt'&&LS.get('buss-tut')==='1')setTimeout(()=>locate(false),700)})();
 ping('open');
-{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));if(v>=2)setTimeout(maybeInstall,6000)}
+{const v=+(LS.get('buss-visits')||0)+1;LS.set('buss-visits',String(v));setTimeout(maybeInstall,v===1?2500:6000)}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
 window.BUSS={get map(){return map},state,ROUTES,get RT(){return RT},MOV,get VEHS(){return VEHS}}; // for tests in the browser console
 // for the headless tests only (?debug): no effect otherwise
